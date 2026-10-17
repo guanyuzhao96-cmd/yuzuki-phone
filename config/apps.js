@@ -29,6 +29,7 @@ export const DEFAULT_APP_ICONS = Object.freeze({
 export const DEFAULT_PHONE_WALLPAPER = new URL('../phone/手机背景.jpg', import.meta.url).href;
 
 export const APPS = [
+    { id: 'dossier', name: '角色档案', icon: '📇', color: '#547c72', data: {} },
     // 第一行
     {
         id: 'wechat',

@@ -8,6 +8,7 @@ const phoneCssSource = readSource('../phone.css');
 const mofoViewSource = readSource('../apps/mofo/mofo-view.js');
 const weiboAppSource = readSource('../apps/weibo/weibo-app.js');
 const controllers = new Map([
+    ['dossier', ['角色档案', readSource('../apps/dossier/dossier-app.js')]],
     ['wechat', ['微信', readSource('../apps/wechat/wechat-app.js')]],
     ['weibo', ['微博', readSource('../apps/weibo/weibo-app.js')]],
     ['x', ['X', readSource('../apps/x/x-app.js')]],

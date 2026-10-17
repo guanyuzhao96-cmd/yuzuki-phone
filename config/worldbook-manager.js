@@ -241,6 +241,29 @@ async function fetchWorldInfoByName(name) {
 }
 
 export class WorldbookManager {
+    async readDossierWorldbook(name) {
+        const data = await fetchWorldInfoByName(name);
+        if (!data) throw new Error(`无法读取世界书：${name}`);
+        return { name, entries: normalizeEntries(data.entries, { includeDisabled: true }) };
+    }
+
+    async getDossierDefaultBooks() {
+        const context = this._getContext();
+        const module = await this._loadWorldInfoModule();
+        const character = context?.characters?.[context.characterId];
+        const lore = module?.world_info || window.world_info || {};
+        const avatar = safeString(character?.avatar).replace(/\.[^.]+$/, '');
+        const extraBooks = Array.isArray(lore.charLore)
+            ? lore.charLore.filter(item => item.name === avatar).flatMap(item => item.extraBooks || []) : [];
+        return uniqueStrings([
+            ...(Array.isArray(module?.selected_world_info) ? module.selected_world_info : []),
+            ...(Array.isArray(lore.globalSelect) ? lore.globalSelect : []),
+            ...extraBooks,
+            character?.data?.extensions?.world,
+            context?.chatMetadata?.world_info
+        ]);
+    }
+
     constructor(storage = null) {
         this.storage = storage;
         this._cache = null;

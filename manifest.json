@@ -1,16 +1,16 @@
 {
-    "display_name": "柚月の手机",
+    "display_name": "柚月手机·角色档案版",
     "name": "yuzuki-phone",
-    "description": "一个为酒馆量身定制的超拟真、高交互虚拟手机系统。支持微信、朋友圈、微博热搜、音视频通话及音乐播放等沉浸式RP体验。",
+    "description": "基于柚月手机的角色档案增强版本：自动关联 CWB 目录，只读展示角色资料、动态档案与 MVU 当前状态。",
     "author": "yuzuki",
-    "version": "1.6.3",
+    "version": "1.6.4",
     "loading_order": 200,
     "requires": [],
     "optional": [],
     "generate_interceptor": "yuzukiPhoneGenerateInterceptor",
     "js": "index.js",
     "css": "phone.css",
-    "homePage": "https://github.com/gaigai315/yuzuki-phone",
-    "source": "https://github.com/gaigai315/yuzuki-phone.git",
+    "homePage": "https://github.com/guanyuzhao96-cmd/yuzuki-phone",
+    "source": "https://github.com/guanyuzhao96-cmd/yuzuki-phone.git",
     "auto_update": true
 }

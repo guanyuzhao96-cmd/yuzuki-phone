@@ -355,7 +355,7 @@ export class HomeScreen {
     }
 
     renderClusterApps() {
-        const clusterIds = ['x', 'honey', 'games', 'phone', 'diary', 'calendar', 'mofo'];
+        const clusterIds = ['x', 'honey', 'games', 'phone', 'diary', 'calendar', 'mofo', 'dossier'];
         return clusterIds
             .map(id => this.getAppById(id))
             .filter(Boolean)
