@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildCharacters, parseFields, visibleFields, flattenMvu, latestMvu, escapeHtml } from '../apps/dossier/dossier-data.js';
+import { buildCharacters, parseFields, visibleFields, flattenMvu, latestMvu, escapeHtml, findMvuRole, formatMvuValue, latestMvuSnapshot, MVU_ROLE_FIELDS } from '../apps/dossier/dossier-data.js';
 import { WorldbookManager } from '../config/worldbook-manager.js';
 
 test('automatic directory discovery includes attached global, main, extra and chat books only', async () => {
@@ -63,8 +63,39 @@ test('MVU pointers preserve unusual names, zero, false and null without writes',
 
 test('latest MVU searches backward rather than requiring final message to own data', () => {
     const chat = [{ stat_data: { 好感: 3 } }, { stat_data: { 好感: 8 } }, { mes: '正文' }];
-    assert.deepEqual(latestMvu(chat), { data: { 好感: 8 }, floor: 1 });
+    assert.deepEqual(latestMvu(chat), { data: { 好感: 8 }, floor: 1, source: 'chat' });
     assert.equal(latestMvu([]), null);
+});
+
+test('MVU dossier fields match the formal role name and preserve source data', () => {
+    const data = { stat_data: { roles: {
+        role_17: { role_name: '秦雅楠', grade: 'SS', affection: 0, relationship: '师生暧昧', quests: [], longTermGoal: null },
+        role_18: { role_name: '周韵涵', affection: 72 },
+    } } };
+    const before = JSON.stringify(data);
+    const found = findMvuRole(data, '秦雅楠');
+    assert.equal(found.status, 'matched');
+    assert.equal(found.id, 'role_17');
+    assert.equal(found.role.affection, 0);
+    assert.equal(formatMvuValue(found.role.longTermGoal), '未记录');
+    assert.ok(MVU_ROLE_FIELDS.some(([key]) => key === 'approachEvidence'));
+    assert.ok(MVU_ROLE_FIELDS.some(([key]) => key === 'quests'));
+    assert.equal(JSON.stringify(data), before);
+});
+
+test('MVU role matching refuses ambiguous and approximate names', () => {
+    assert.equal(findMvuRole({ roles: { a: { role_name: '秦雅楠' }, b: { role_name: '秦雅楠' } } }, '秦雅楠').status, 'ambiguous');
+    assert.equal(findMvuRole({ roles: { qinyanan: { role_name: '秦雅楠2' } } }, '秦雅楠').status, 'missing');
+});
+
+test('latest MVU API read is preferred and falls back to serialized chat data', () => {
+    let args;
+    const snapshot = latestMvuSnapshot(input => { args = input; return { stat_data: { roles: { 秦雅楠: {} } } }; }, []);
+    assert.deepEqual(args, { type: 'message', message_id: 'latest' });
+    assert.equal(snapshot.source, 'MVU');
+    assert.ok(snapshot.data.roles.秦雅楠);
+    const fallback = latestMvuSnapshot(() => { throw new Error('not ready'); }, [{ stat_data: { roles: {} } }]);
+    assert.equal(fallback.source, 'chat');
 });
 
 test('worldbook strings are escaped before entering HTML', () => {

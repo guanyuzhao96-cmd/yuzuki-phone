@@ -4,7 +4,7 @@
 
 支持 CWB 目录的 `姓名: "完整姓名"` 格式；静态角色条目的顶层中文字段，以及动态档案的 `[字段.序号]:内容` 格式。按世界书与完整姓名区分角色，多个候选来源需要手动选择；尚未提供资料的目录角色仍列出。停用的条目可作为只读资料查看，并标明停用状态。原文以转义文本展示，绝不执行 HTML 或指令。
 
-MVU 读取当前聊天从后向前最近一条带 `stat_data` 的消息，显示数据所在楼层。每个角色可以选择变量路径并自定义展示名称；路径使用 JSON Pointer，保留零、空值和布尔值。其他 MVU 存储格式暂未适配，不自动猜测字段归属。
+MVU 优先通过酒馆助手 `Mvu.getMvuData({type:'message', message_id:'latest'})` 读取最新消息；接口不可用时，回退到当前聊天最近一条带 `stat_data` 的消息。只读 `stat_data.roles`，按角色档案完整姓名匹配角色对象的 `role_name`，其次允许 MVU 角色 ID 与完整姓名完全相同；多条匹配或近似名称均不自动绑定。自动展示 `grade`、`relationship`、`affection`、`romanceStatus`、`approachStage`、`approachEvidence`、`currentGoal`、`goalProgress`、`currentMoodOrDesire`、`shortTermGoal`、`longTermGoal` 和 `quests`；缺失、空值或 `null` 显示“未记录”，数值 0 和布尔值照原样显示。其他字段仍可用自定义 JSON Pointer 展示。插件不会调用 MVU 更新接口，也不会写入角色数据。
 
 当前应用打开时读取，消息相关事件后延迟读取，前台每 20 秒重新核对当前绑定的世界书与目录；回到桌面或打开其他应用停止定时器，后台标签与关闭的手机面板不读取。手动刷新直接读取服务端已保存世界书。异步结果校验聊天身份及请求序号，切换聊天后舍弃旧结果。未保存到世界书编辑器的数据无法从服务端读取。
 

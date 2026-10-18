@@ -1,5 +1,5 @@
 import { WorldbookManager } from '../../config/worldbook-manager.js';
-import { buildCharacters, escapeHtml as e, flattenMvu, latestMvu, visibleFields } from './dossier-data.js';
+import { buildCharacters, escapeHtml as e, findMvuRole, flattenMvu, formatMvuValue, latestMvuSnapshot, MVU_ROLE_FIELDS, visibleFields } from './dossier-data.js';
 
 const KEY = 'chat_dossier_preferences';
 const css = `
@@ -99,7 +99,12 @@ export class DossierApp {
         try {
             const names = await this.manager.getDossierDefaultBooks();
             const results = await Promise.allSettled(names.map(name => this.manager.readDossierWorldbook(name)));
-            const mvu = latestMvu(this.context().chat);
+            const ctx = this.context();
+            const mvuApi = ctx.Mvu || window.Mvu || window.parent?.Mvu;
+            const getMvuData = typeof mvuApi?.getMvuData === 'function'
+                ? args => mvuApi.getMvuData(args)
+                : null;
+            const mvu = latestMvuSnapshot(getMvuData, ctx.chat);
             if (token !== this.sequence || scope !== this.scope() || !this.active) return;
             this.books = names;
             this.errors = results.flatMap((result, i) => result.status === 'rejected' ? [`${names[i]}：${result.reason.message}`] : []);
@@ -135,9 +140,18 @@ export class DossierApp {
             return `<details open><summary>${label}</summary>${candidates.length > 1 ? `<p class="warning">找到多个条目，请选择当前来源。</p><select data-source="${type}"><option value="">请选择</option>${candidates.map(s => `<option value="${e(s.uid)}" ${s === source ? 'selected' : ''}>${e(s.comment)} · UID ${e(s.uid)}</option>`).join('')}</select>` : ''}${source ? `${type === 'static' ? this.section('角色资料', visibleFields(source.fields)) : this.dynamicSections(source.fields)}<small>来源：${e(role.book)} / ${e(source.comment)} · UID ${e(source.uid)}${source.enabled === false ? ' · 条目已停用' : ''}</small><details><summary>查看源条目原文</summary><pre>${e(source.content)}</pre></details>` : '<p class="muted">未记录或尚未选择来源</p>'}</details>`;
         }).join('');
         const paths = flattenMvu(this.mvu?.data);
+        const mvuRole = findMvuRole(this.mvu?.data, role.name);
+        const mvuValues = MVU_ROLE_FIELDS.map(([key, label]) => ({
+            label,
+            value: mvuRole.role ? formatMvuValue(mvuRole.role[key]) : '未匹配到该角色的 MVU 数据',
+        }));
         const mappings = this.prefs().mappings?.[role.id] || [];
-        const values = mappings.map(m => ({ label: m.label, value: paths.some(p => p.path === m.path) ? `${String(paths.find(p => p.path === m.path).value)}\n来源路径：${m.path}` : `当前 MVU 中不存在：${m.path}` }));
-        return `<h2>${e(role.name)}</h2><small>${e(role.book)}</small>${sources}${this.section('MVU 当前状态', values)}<details><summary>配置 MVU 展示字段</summary><small>${this.mvu ? `读取聊天第 ${this.mvu.floor} 楼的 stat_data；最多列出 2000 个字段。` : '未找到聊天消息中的 stat_data。可先查看酒馆是否已生成 MVU 数据。'}</small><input data-mvu-label placeholder="显示名称，例如好感度" aria-label="MVU 显示名称"><select data-mvu-path aria-label="MVU 变量路径"><option value="">选择变量路径</option>${paths.map(p => `<option value="${e(p.path)}">${e(p.path)} = ${e(String(p.value).slice(0, 70))}</option>`).join('')}</select><button data-action="add-mapping">添加展示字段</button>${mappings.map((m, i) => `<p>${e(m.label)}：${e(m.path)} <button data-remove="${i}">移除展示</button></p>`).join('')}</details><small>世界书读取：${e(this.readAt || '尚未读取')}；动态资料的剧情进度请以源条目记录为准。</small>`;
+        const values = mappings.map(m => ({ label: m.label, value: paths.some(p => p.path === m.path) ? `${formatMvuValue(paths.find(p => p.path === m.path).value)}\n来源路径：${m.path}` : `当前 MVU 中不存在：${m.path}` }));
+        const mvuStatus = !this.mvu ? '未找到当前聊天的 MVU 数据。' : mvuRole.status === 'matched'
+            ? `已按正式姓名匹配角色 ID：${mvuRole.id}；读取来源：${this.mvu.source === 'MVU' ? 'MVU 最新数据' : `聊天第 ${this.mvu.floor} 楼的 stat_data`}。`
+            : mvuRole.status === 'ambiguous' ? '多个角色的 role_name 与该档案姓名相同，暂不自动绑定。'
+                : '未找到 role_name 或角色 ID 与该档案姓名一致的角色；不会按相似名称猜测。';
+        return `<h2>${e(role.name)}</h2><small>${e(role.book)}</small>${sources}${this.section('MVU 当前状态', mvuValues)}<small>${e(mvuStatus)}</small>${values.length ? this.section('自定义 MVU 展示字段', values) : ''}<details><summary>配置自定义 MVU 展示字段</summary><small>${this.mvu ? `读取 ${this.mvu.source === 'MVU' ? 'MVU 最新数据' : `聊天第 ${this.mvu.floor} 楼的 stat_data`}；最多列出 2000 个叶子字段。默认字段按角色正式姓名自动匹配，只读展示。` : '未找到 MVU 数据。可先确认酒馆是否已生成 MVU 数据。'}</small><input data-mvu-label placeholder="显示名称，例如好感度" aria-label="MVU 显示名称"><select data-mvu-path aria-label="MVU 变量路径"><option value="">选择变量路径</option>${paths.map(p => `<option value="${e(p.path)}">${e(p.path)} = ${e(String(p.value).slice(0, 70))}</option>`).join('')}</select><button data-action="add-mapping">添加展示字段</button>${mappings.map((m, i) => `<p>${e(m.label)}：${e(m.path)} <button data-remove="${i}">移除展示</button></p>`).join('')}</details><small>世界书读取：${e(this.readAt || '尚未读取')}；动态资料的剧情进度请以源条目记录为准。</small>`;
     }
 
     dynamicSections(fields) {

@@ -62,7 +62,64 @@ export function flattenMvu(root, limit = 2000) {
 
 export function latestMvu(chat = []) {
     for (let i = chat.length - 1; i >= 0; i--) {
-        if (chat[i]?.stat_data && typeof chat[i].stat_data === 'object') return { data: chat[i].stat_data, floor: i };
+        const data = chat[i]?.stat_data;
+        if (data && typeof data === 'object' && !Array.isArray(data)) return { data, floor: i, source: 'chat' };
     }
     return null;
+}
+
+export const MVU_ROLE_FIELDS = [
+    ['grade', '角色等级'],
+    ['relationship', '关系'],
+    ['affection', '好感度'],
+    ['romanceStatus', '恋爱状态'],
+    ['approachStage', '攻略阶段'],
+    ['approachEvidence', '阶段依据'],
+    ['currentGoal', '当前目标'],
+    ['goalProgress', '目标进度'],
+    ['currentMoodOrDesire', '当前状态/欲望'],
+    ['shortTermGoal', '短期目标'],
+    ['longTermGoal', '长期目标'],
+    ['quests', '角色任务'],
+];
+
+export function unwrapMvuData(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    if (value.stat_data && typeof value.stat_data === 'object' && !Array.isArray(value.stat_data)) return value.stat_data;
+    if (value.roles && typeof value.roles === 'object' && !Array.isArray(value.roles)) return value;
+    return null;
+}
+
+export function findMvuRole(value, formalName) {
+    const data = unwrapMvuData(value);
+    const roles = data?.roles;
+    if (!roles || typeof roles !== 'object' || Array.isArray(roles) || !formalName) return { status: 'missing', role: null };
+    const matches = Object.entries(roles).filter(([, role]) => role && typeof role === 'object'
+        && !Array.isArray(role) && String(role.role_name || '').trim() === formalName);
+    if (matches.length === 1) return { status: 'matched', id: matches[0][0], role: matches[0][1] };
+    if (matches.length > 1) return { status: 'ambiguous', role: null };
+    const direct = roles[formalName];
+    if (direct && typeof direct === 'object' && !Array.isArray(direct)
+        && (!direct.role_name || String(direct.role_name).trim() === formalName)) {
+        return { status: 'matched', id: formalName, role: direct };
+    }
+    return { status: 'missing', role: null };
+}
+
+export function formatMvuValue(value) {
+    if (value === undefined || value === null || value === '') return '未记录';
+    if (typeof value === 'object') {
+        try { return JSON.stringify(value, null, 2); } catch (_) { return '无法显示'; }
+    }
+    return String(value);
+}
+
+export function latestMvuSnapshot(api, chat = []) {
+    if (typeof api === 'function') {
+        try {
+            const data = unwrapMvuData(api({ type: 'message', message_id: 'latest' }));
+            if (data) return { data, floor: '最新', source: 'MVU' };
+        } catch (_) { /* Fall back to the current chat's serialized message data. */ }
+    }
+    return latestMvu(chat);
 }
