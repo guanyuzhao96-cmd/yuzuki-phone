@@ -211,7 +211,7 @@ export class PhoneFloatingEntry {
         const style = FLOATING_STYLE_MAP.get(this.getStyle()) || FLOATING_STYLE_MAP.get(PHONE_FLOATING_ENTRY_DEFAULT_STYLE);
         image.src = new URL(style.file, this.baseUrl).href;
         button.dataset.phoneFloatingStyle = style.id;
-        button.title = `单击打开柚月手机·角色档案版，双击打开正文生图（${style.label}悬浮图标）`;
+        button.title = `单击打开柚月の手机，双击打开正文生图（${style.label}悬浮图标）`;
     }
 
     queueActivation() {
@@ -321,7 +321,7 @@ export class PhoneFloatingEntry {
         button.id = FLOATING_BUTTON_ID;
         button.type = 'button';
         button.className = 'phone-floating-entry-button';
-        button.setAttribute('aria-label', '单击打开柚月手机·角色档案版，双击打开正文生图');
+        button.setAttribute('aria-label', '单击打开柚月の手机，双击打开正文生图');
 
         const image = document.createElement('img');
         image.className = 'phone-floating-entry-image';
