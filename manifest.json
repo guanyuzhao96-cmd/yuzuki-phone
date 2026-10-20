@@ -1,9 +1,9 @@
 {
     "display_name": "柚月手机·角色档案版",
     "name": "yuzuki-phone",
-    "description": "基于柚月手机的角色档案增强版本：自动关联 CWB 目录，只读展示角色资料、动态档案与 MVU 当前状态。",
+    "description": "基于柚月手机的角色档案增强版本：自动关联 CWB 目录，只读展示角色资料、动态档案与 MVU 当前状态。统一 iOS 风格界面。",
     "author": "yuzuki",
-    "version": "1.6.5",
+    "version": "1.6.6",
     "loading_order": 200,
     "requires": [],
     "optional": [],

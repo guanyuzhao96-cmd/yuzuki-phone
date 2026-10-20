@@ -9605,3 +9605,234 @@ input:checked + .toggle-slider:before {
         max-height: 46px !important;
     }
 }
+
+
+/* ========================================================
+   柚月手机 iOS 风格统一主题 v1
+   只覆盖视觉属性；保留桌面壁纸、应用识别色与交互逻辑。
+   ======================================================== */
+#phone-panel-content .phone-body-panel {
+    --phone-ios-blue: #007aff;
+    --phone-ios-green: #34c759;
+    --phone-ios-red: #ff3b30;
+    --phone-ios-orange: #ff9500;
+    --phone-ios-label: #1c1c1e;
+    --phone-ios-secondary-label: #8e8e93;
+    --phone-ios-tertiary-label: #aeaeb2;
+    --phone-ios-grouped-bg: #f2f2f7;
+    --phone-ios-card: #ffffff;
+    --phone-ios-separator: rgba(60, 60, 67, 0.16);
+    --phone-ios-radius-card: 16px;
+    --phone-ios-radius-control: 12px;
+    --phone-ios-radius-sheet: 22px;
+    color: var(--phone-ios-label);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+}
+
+#phone-panel-content .phone-screen,
+#phone-panel-content .phone-screen * {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+}
+
+#phone-panel-content .phone-screen {
+    color: var(--phone-ios-label);
+    background: var(--phone-ios-grouped-bg);
+}
+
+#phone-panel-content .phone-screen :is(.settings-app, .app-body) {
+    color: var(--phone-ios-label);
+    background-color: var(--phone-ios-grouped-bg);
+}
+
+#phone-panel-content .phone-screen .app-header {
+    min-height: 54px;
+    padding: 40px 16px 10px;
+    gap: 12px;
+    color: var(--phone-ios-label);
+    background: rgba(249, 249, 249, 0.88);
+    border-bottom: 1px solid var(--phone-ios-separator);
+    box-shadow: none;
+    -webkit-backdrop-filter: saturate(180%) blur(18px);
+    backdrop-filter: saturate(180%) blur(18px);
+}
+
+#phone-panel-content .phone-screen .app-header h1,
+#phone-panel-content .phone-screen .app-header h2,
+#phone-panel-content .phone-screen .app-header h3,
+#phone-panel-content .phone-screen .app-header .title {
+    margin: 0;
+    color: var(--phone-ios-label);
+    font-size: 17px;
+    font-weight: 650;
+    line-height: 1.25;
+    letter-spacing: -0.25px;
+}
+
+#phone-panel-content .phone-screen .app-header button,
+#phone-panel-content .phone-screen .app-header .back-button {
+    min-width: 34px;
+    min-height: 34px;
+    padding: 6px 8px;
+    border: 0;
+    border-radius: 12px;
+    background: transparent;
+    box-shadow: none;
+    color: var(--phone-ios-blue);
+    font-size: 15px;
+    font-weight: 500;
+}
+
+#phone-panel-content .phone-screen .app-body {
+    padding: 14px 14px 22px;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+}
+
+#phone-panel-content .phone-screen button,
+#phone-panel-content .phone-screen [role="button"] {
+    font-family: inherit;
+    -webkit-appearance: none;
+    appearance: none;
+    transition: transform 140ms ease, opacity 140ms ease, background-color 140ms ease, box-shadow 140ms ease;
+}
+
+#phone-panel-content .phone-screen button:active,
+#phone-panel-content .phone-screen [role="button"]:active {
+    transform: scale(0.98);
+}
+
+#phone-panel-content .phone-screen :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea) {
+    min-height: 40px;
+    padding: 10px 12px;
+    border: 1px solid rgba(60, 60, 67, 0.18);
+    border-radius: var(--phone-ios-radius-control);
+    background-color: #fff;
+    color: var(--phone-ios-label);
+    font-size: 15px;
+    line-height: 1.35;
+    box-shadow: none;
+}
+
+#phone-panel-content .phone-screen textarea {
+    min-height: 76px;
+    resize: vertical;
+}
+
+#phone-panel-content .phone-screen :is(input, select, textarea)::placeholder {
+    color: var(--phone-ios-tertiary-label);
+    opacity: 1;
+}
+
+#phone-panel-content .phone-screen :is(input, select, textarea):focus {
+    border-color: rgba(0, 122, 255, 0.65);
+    outline: 3px solid rgba(0, 122, 255, 0.14);
+    outline-offset: 0;
+}
+
+#phone-panel-content .phone-screen input[type="checkbox"],
+#phone-panel-content .phone-screen input[type="radio"] {
+    accent-color: var(--phone-ios-blue);
+}
+
+#phone-panel-content .phone-screen :is(.settings-section, .settings-card, .setting-card, .app-card, .list-card, .contact-card, .conversation-card, .dossier-card, .dossier-panel, .dossier-section) {
+    border: 1px solid rgba(60, 60, 67, 0.08);
+    border-radius: var(--phone-ios-radius-card);
+    background: var(--phone-ios-card);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.035);
+}
+
+#phone-panel-content .phone-screen :is(.settings-row, .setting-row, .setting-item, .list-item, .contact-item, .conversation-item, .dossier-row) {
+    border-color: var(--phone-ios-separator);
+}
+
+#phone-panel-content .phone-screen :is(.secondary-text, .subtitle, .description, .muted, .text-secondary) {
+    color: var(--phone-ios-secondary-label);
+}
+
+#phone-panel-content .phone-screen :is(.app-tabs, .tab-bar, .settings-tabs, .dossier-tabs, .bottom-tab-bar) {
+    border-color: var(--phone-ios-separator);
+    background: rgba(249, 249, 249, 0.92);
+    -webkit-backdrop-filter: saturate(180%) blur(18px);
+    backdrop-filter: saturate(180%) blur(18px);
+}
+
+#phone-panel-content .phone-screen :is(.app-tabs, .settings-tabs, .dossier-tabs) :is(button, [role="tab"], .tab-item) {
+    min-height: 38px;
+    border-radius: 11px;
+}
+
+#phone-panel-content .phone-screen :is(.app-tabs, .settings-tabs, .dossier-tabs) :is(.active, [aria-selected="true"], .is-active) {
+    color: var(--phone-ios-blue);
+}
+
+#phone-panel-content .phone-screen :is(.modal, .dialog, .modal-content, .dialog-content, .popup-content, .phone-dialog, .st-phone-update-dialog, [role="dialog"]) {
+    border: 1px solid rgba(255, 255, 255, 0.7);
+    border-radius: var(--phone-ios-radius-sheet);
+    background-color: rgba(255, 255, 255, 0.96);
+    color: var(--phone-ios-label);
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.18);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    backdrop-filter: saturate(180%) blur(20px);
+}
+
+#phone-panel-content .phone-screen :is(.modal-overlay, .dialog-overlay, .popup-mask) {
+    background: rgba(20, 20, 24, 0.38);
+    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(4px);
+}
+
+#phone-panel-content .phone-screen .dock {
+    border: 1px solid rgba(255, 255, 255, 0.48);
+    background: rgba(245, 245, 250, 0.52);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.48);
+    -webkit-backdrop-filter: saturate(180%) blur(24px);
+    backdrop-filter: saturate(180%) blur(24px);
+}
+
+#phone-panel-content .phone-screen :is(.phone-switch, input[type="checkbox"].switch) {
+    accent-color: var(--phone-ios-green);
+}
+
+#phone-panel-content .phone-screen :focus-visible {
+    outline: 2px solid var(--phone-ios-blue);
+    outline-offset: 2px;
+}
+
+#phone-panel-content .phone-screen ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+}
+
+#phone-panel-content .phone-screen ::-webkit-scrollbar-thumb {
+    border-radius: 4px;
+    background: rgba(60, 60, 67, 0.22);
+}
+
+@media (max-width: 600px), (pointer: coarse) {
+    #phone-panel-content .phone-screen .app-header {
+        padding-right: 14px;
+        padding-left: 14px;
+    }
+
+    #phone-panel-content .phone-screen button:not(.app-icon):not(.dock-app) {
+        min-height: 38px;
+    }
+
+    #phone-panel-content .phone-screen :is(input, select, textarea) {
+        font-size: 16px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #phone-panel-content .phone-screen *,
+    #phone-panel-content .phone-screen *::before,
+    #phone-panel-content .phone-screen *::after {
+        scroll-behavior: auto !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
