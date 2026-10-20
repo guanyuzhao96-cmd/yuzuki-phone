@@ -38,8 +38,8 @@ import {
 } from './apps/mofo/mofo-renderer.js';
 
 const ST_PHONE_BASE_URL = new URL('./', import.meta.url).href;
-const ST_PHONE_VERSION = '1.6.7';
-const ST_PHONE_CSS_REVISION = '20261020-ios-unified-theme';
+const ST_PHONE_VERSION = '1.6.8';
+const ST_PHONE_CSS_REVISION = '20261020-ios-unified-theme-v2';
 const ST_PHONE_APP_SWIPE_REVISION = '20261002-wechat-chat-return';
 const ST_PHONE_ALBUM_MODULE_REVISION = '20261006-story-image-outside-close';
 const ST_PHONE_WECHAT_MODULE_REVISION = '20261011-wallet-credit-repayment';
@@ -10844,7 +10844,7 @@ if (window.GGP_Loaded) {
                 existing?.remove();
                 document.head.appendChild(style);
 
-                const iosThemeMarker = '/* ========================================================\\n   ST PHONE IOS THEME START';
+                const iosThemeMarker = 'ST PHONE IOS THEME START';
                 const iosThemeIndex = finalCssText.indexOf(iosThemeMarker);
                 if (iosThemeIndex >= 0) {
                     let iosThemeStyle = document.getElementById('st-phone-ios-theme');

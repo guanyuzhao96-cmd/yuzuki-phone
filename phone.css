@@ -9665,6 +9665,9 @@ input:checked + .toggle-slider:before {
     color: var(--phone-ios-label) !important;
     background-color: var(--phone-ios-grouped-bg) !important;
 }
+#phone-panel-content .phone-screen :is(.wechat-app, .honey-app, .mofo-app, .wangxiang-app, .phone-app, .music-app) {
+    background-color: var(--phone-ios-grouped-bg) !important;
+}
 
 /* Common iOS navigation bars across the built-in apps */
 #phone-panel-content .phone-screen :is(
@@ -9792,6 +9795,8 @@ input:checked + .toggle-slider:before {
     [class*="-sheet"], [class*="-modal"]
 ) {
     border-radius: 22px !important;
+    background-color: rgba(255, 255, 255, 0.96) !important;
+    color: var(--phone-ios-label);
     box-shadow: 0 18px 48px rgba(0, 0, 0, 0.18) !important;
 }
 #phone-panel-content .phone-screen :focus-visible {
