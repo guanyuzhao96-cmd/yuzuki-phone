@@ -1,4 +1,6 @@
 import { CALL_HANGUP_RULE, parseCallHangupReply } from '../../config/call-hangup.js';
+import { WorldbookManager } from '../../config/worldbook-manager.js';
+import { buildCharacters, findMvuRole, formatMvuValue, latestMvuSnapshot } from '../dossier/dossier-data.js';
 /* ========================================================
  *  柚月小手机 (Yuzuki's Little Phone)
  *  作者 (Author): yuzuki
@@ -93,6 +95,8 @@ export class ChatView {
         this.abortController = null;  // 🔥 用于中断请求
         this.batchTimer = null;  // 🔥 智能连发倒计时
         this.pendingChatIds = new Set(); // 🔥 记录等待统一发送的会话队列
+        this.pullToRefreshPendingChatIds = new Set(); // 仅在微信会话列表下拉时请求回复
+        this.isPullToRefreshActive = false;
         this.activeQuote = null;  // 🔥 当前激活的引用消息
         this.audioPlayer = new Audio();
         this.currentPlayingMsgId = null;
@@ -121,6 +125,8 @@ export class ChatView {
         this.messageSelectionChatId = null;
         this._lobbyPersonaProfileCache = new Map();
         this._lobbyPersonaCacheTTL = 10 * 60 * 1000;
+        this._wechatRoleArchiveCache = null;
+        this._wechatRoleArchiveLoad = null;
         this._lobbyPersonaEmptyCacheTTL = 45 * 1000;
         this._lobbyPersonaCacheMax = 128;
     }
@@ -1013,9 +1019,108 @@ export class ChatView {
         return this._cleanWechatResponsePayload(text);
     }
 
-    _getPendingChatIdsOrdered(preferredChatId = null) {
+    async _getWechatRoleArchive(context = null) {
+        const ctx = context || this._safeGetContext?.() || {};
+        const scope = JSON.stringify([
+            ctx?.characterId ?? '',
+            ctx?.chatId ?? '',
+            ctx?.chatMetadata?.file_name ?? '',
+            ctx?.chatMetadata?.world_info ?? ''
+        ]);
+        if (this._wechatRoleArchiveCache?.scope === scope
+            && Date.now() - this._wechatRoleArchiveCache.loadedAt < 60_000) {
+            return this._wechatRoleArchiveCache.characters;
+        }
+        if (this._wechatRoleArchiveLoad?.scope === scope) return this._wechatRoleArchiveLoad.promise;
+
+        const promise = (async () => {
+            try {
+                const manager = window.VirtualPhone?.dossierApp?.manager || new WorldbookManager(this.app?.storage);
+                const bookNames = await manager.getDossierDefaultBooks();
+                const results = await Promise.allSettled(bookNames.map(name => manager.readDossierWorldbook(name)));
+                const books = results.filter(result => result.status === 'fulfilled').map(result => result.value);
+                const characters = buildCharacters(books);
+                this._wechatRoleArchiveCache = { scope, loadedAt: Date.now(), characters };
+                return characters;
+            } catch (error) {
+                console.warn('[Wechat] 读取联系人角色档案失败，将使用联系人已有资料:', error);
+                this._wechatRoleArchiveCache = { scope, loadedAt: Date.now(), characters: [] };
+                return [];
+            } finally {
+                if (this._wechatRoleArchiveLoad?.scope === scope) this._wechatRoleArchiveLoad = null;
+            }
+        })();
+        this._wechatRoleArchiveLoad = { scope, promise };
+        return promise;
+    }
+
+    async _getWechatContactSyncProfile(contact = {}, context = null) {
+        const ctx = context || this._safeGetContext?.() || {};
+        const contactNames = [contact.characterName, contact.formalName, contact.fullName, contact.name, contact.remark]
+            .map(value => String(value || '').trim()).filter(Boolean);
+        const contactName = contactNames[0] || '';
+        const roleArchives = contactNames.length > 0 ? await this._getWechatRoleArchive(ctx) : [];
+        const roleArchive = roleArchives.find(role => contactNames.includes(role.name)) || null;
+        const characterList = Array.isArray(ctx.characters) ? ctx.characters : Object.values(ctx.characters || {});
+        const matchingCharacter = characterList.find(character => contactNames.includes(
+            String(character?.name || character?.data?.name || '').trim()
+        )) || null;
+        const staticFields = (roleArchive?.sources || [])
+            .filter(source => source.type === 'static' && source.enabled !== false)
+            .flatMap(source => Array.isArray(source.fields) ? source.fields : []);
+        const dynamicFields = (roleArchive?.sources || [])
+            .filter(source => source.type === 'dynamic' && source.enabled !== false)
+            .flatMap(source => Array.isArray(source.fields) ? source.fields : []);
+        const limitText = (value, limit) => {
+            const text = String(value ?? '').trim();
+            return text.length > limit ? `${text.slice(0, limit)}…` : text;
+        };
+        const collectFields = (fields, pattern) => fields
+            .filter(field => pattern.test(String(field.label || '')) && String(field.value ?? '').trim())
+            .map(field => `${String(field.label).trim()}：${limitText(field.value, 320)}`)
+            .slice(0, 4);
+
+        let personality = String(contact.personality || contact.characterPersonality || '').trim();
+        if (!personality) personality = collectFields(staticFields, /性格|个性|行为特征|性情/).join('；');
+        if (!personality && matchingCharacter) {
+            personality = String(matchingCharacter.personality || matchingCharacter.data?.personality || '').trim();
+        }
+        if (!personality) personality = String(contact.description || '').trim();
+        personality = limitText(personality, 900);
+
+        const mvuApi = ctx.Mvu || window.Mvu || window.parent?.Mvu;
+        const mvuSnapshot = latestMvuSnapshot(
+            typeof mvuApi?.getMvuData === 'function' ? args => mvuApi.getMvuData(args) : null,
+            Array.isArray(ctx.chat) ? ctx.chat : []
+        );
+        const formalName = roleArchive?.name || matchingCharacter?.name || matchingCharacter?.data?.name || contactName;
+        const mvuMatch = formalName ? findMvuRole(mvuSnapshot?.data, formalName) : { status: 'missing', role: null };
+        const mvuRole = mvuMatch.status === 'matched' ? mvuMatch.role : null;
+        const mvuRelation = mvuRole?.relationship;
+        const mvuAffection = mvuRole?.affection;
+        const archiveRelation = collectFields(dynamicFields, /^(关系|relationship|与用户关系|对用户关系)$/i).join('；');
+        const archiveAffection = collectFields(dynamicFields, /^(好感度|affection|对用户好感度)$/i).join('；');
+        const relationship = mvuRelation !== undefined && mvuRelation !== null && mvuRelation !== ''
+            ? formatMvuValue(mvuRelation)
+            : (archiveRelation || String(contact.relationship || contact.relation || '').trim() || '未记录');
+        const affection = mvuAffection !== undefined && mvuAffection !== null && mvuAffection !== ''
+            ? formatMvuValue(mvuAffection)
+            : (archiveAffection || (contact.affection !== undefined && contact.affection !== null ? String(contact.affection) : '未记录'));
+
+        return {
+            roleName: formalName,
+            personality: personality || '未记录',
+            relationship,
+            affection,
+            source: mvuRole ? 'MVU最新角色状态' : (roleArchive ? '关联角色档案' : (matchingCharacter ? '酒馆角色卡' : '联系人资料'))
+        };
+    }
+
+    _getPendingChatIdsOrdered(preferredChatId = null, includePullToRefreshPending = false) {
         const preferred = String(preferredChatId || '').trim();
-        const ids = Array.from(this.pendingChatIds || []).map(id => String(id || '').trim()).filter(Boolean);
+        const ids = Array.from(this.pendingChatIds || [])
+            .map(id => String(id || '').trim())
+            .filter(id => id && (includePullToRefreshPending || !this.pullToRefreshPendingChatIds?.has(id)));
         if (!preferred) return ids;
         const unique = [];
         if (ids.includes(preferred)) unique.push(preferred);
@@ -1025,7 +1130,7 @@ export class ChatView {
         return unique;
     }
 
-    _enqueuePendingChat(chatId, { shouldStartTimer = true, shouldShowStatus = true } = {}) {
+    _enqueuePendingChat(chatId, { shouldStartTimer = true, shouldShowStatus = true, waitForPullToRefresh = false } = {}) {
         const safeChatId = String(chatId || '').trim();
         if (!safeChatId) return false;
 
@@ -1036,6 +1141,11 @@ export class ChatView {
         }
 
         this.pendingChatIds.add(safeChatId);
+        if (waitForPullToRefresh) {
+            this.pullToRefreshPendingChatIds.add(safeChatId);
+        } else {
+            this.pullToRefreshPendingChatIds.delete(safeChatId);
+        }
 
         if (shouldStartTimer) {
             clearTimeout(this.batchTimer);
@@ -1053,6 +1163,7 @@ export class ChatView {
         const safeChatId = String(chatId || '').trim();
         if (!safeChatId) return;
         this.pendingChatIds.delete(safeChatId);
+        this.pullToRefreshPendingChatIds.delete(safeChatId);
     }
 
     _hasPendingChat(chatId = null) {
@@ -1637,7 +1748,7 @@ export class ChatView {
         return String(contact?.wechatSupplementalSetting || '').trim();
     }
 
-    _buildGroupSupplementalContactProfileMessage(targetChat = null) {
+    async _buildGroupSupplementalContactProfileMessage(targetChat = null, context = null) {
         if (!targetChat || targetChat.type !== 'group') return null;
 
         const contacts = this.app.wechatData.getContacts?.() || [];
@@ -1652,23 +1763,28 @@ export class ChatView {
         const seenContacts = new Set();
         const memberProfiles = [];
 
-        memberNames.forEach((memberName) => {
+        for (const memberName of memberNames) {
             const contact = this.app.wechatData.findContactByNameLoose?.(memberName, { includeChats: false });
-            if (!contact) return;
+            if (!contact) continue;
 
             const isWechatContact = contacts.some((item) => item === contact
                 || (item?.id && contact?.id && String(item.id) === String(contact.id)));
-            if (!isWechatContact) return;
+            if (!isWechatContact) continue;
 
             const contactKey = String(contact.id || contact.name || memberName).trim();
-            if (!contactKey || seenContacts.has(contactKey)) return;
+            if (!contactKey || seenContacts.has(contactKey)) continue;
 
+            const syncedProfile = await this._getWechatContactSyncProfile(contact, context);
             const supplementalSetting = this._getWechatSupplementalSetting(contact);
-            if (!supplementalSetting) return;
-
             seenContacts.add(contactKey);
-            memberProfiles.push(`【${contact.name || memberName}】\n${supplementalSetting}`);
-        });
+            memberProfiles.push([
+                `【${contact.name || memberName}】`,
+                `性格：${String(syncedProfile.personality || '未记录').slice(0, 360)}`,
+                `对用户好感度：${syncedProfile.affection}`,
+                `与用户关系：${syncedProfile.relationship}`,
+                supplementalSetting ? `补充微信设定：${supplementalSetting}` : ''
+            ].filter(Boolean).join('\n'));
+        }
 
         if (memberProfiles.length === 0) return null;
         return {
@@ -2764,7 +2880,7 @@ export class ChatView {
             return;
         }
 
-        const pendingIds = Array.from(this.pendingChatIds || []).map(id => String(id || '').trim()).filter(Boolean);
+        const pendingIds = this._getPendingChatIdsOrdered();
         const sendableIds = pendingIds.filter(id => this._isPendingChatSendable(id));
         clearTimeout(this.batchTimer);
         if (sendableIds.length === 0) {
@@ -2781,6 +2897,86 @@ export class ChatView {
                 this.hideTypingStatus();
             }
         }
+    }
+
+    getPullToRefreshPendingCount() {
+        return this.pullToRefreshPendingChatIds?.size || 0;
+    }
+
+    bindChatListPullToRefresh() {
+        if (this.app.currentChat || this.app.currentView !== 'chats') return;
+        const currentView = this.getCurrentWechatView ? this.getCurrentWechatView() : document;
+        const list = currentView.querySelector('.wechat-chat-list');
+        const indicator = list?.querySelector('.wechat-chat-refresh-indicator');
+        if (!list || !indicator || list._wechatPullRefreshBound) return;
+        list._wechatPullRefreshBound = true;
+
+        let startX = 0;
+        let startY = 0;
+        let pullDistance = 0;
+        let tracking = false;
+        const threshold = 64;
+        const reset = () => {
+            tracking = false;
+            pullDistance = 0;
+            indicator.style.height = '0px';
+            indicator.classList.remove('ready', 'loading');
+            indicator.textContent = '下拉获取待回复消息';
+        };
+
+        list.addEventListener('touchstart', event => {
+            if (this.getPullToRefreshPendingCount() === 0 || list.scrollTop > 0) {
+                tracking = false;
+                return;
+            }
+            const touch = event.touches?.[0];
+            if (!touch) return;
+            startX = Number(touch.clientX || 0);
+            startY = Number(touch.clientY || 0);
+            pullDistance = 0;
+            tracking = true;
+        }, { passive: true });
+
+        list.addEventListener('touchmove', event => {
+            if (!tracking) return;
+            const touch = event.touches?.[0];
+            if (!touch) return;
+            const deltaY = Number(touch.clientY || 0) - startY;
+            const deltaX = Math.abs(Number(touch.clientX || 0) - startX);
+            if (deltaY <= 0 || deltaY <= deltaX) {
+                if (deltaX > 8 || deltaY < -8) reset();
+                return;
+            }
+            pullDistance = Math.min(88, deltaY);
+            indicator.style.height = `${Math.min(56, Math.round(pullDistance * .7))}px`;
+            const ready = pullDistance >= threshold;
+            indicator.classList.toggle('ready', ready);
+            indicator.textContent = ready ? '松开即可更新回复' : '继续下拉以更新回复';
+            if (event.cancelable && pullDistance > 6) event.preventDefault();
+        }, { passive: false });
+
+        const finish = async () => {
+            if (!tracking) return;
+            const shouldRefresh = pullDistance >= threshold;
+            tracking = false;
+            if (!shouldRefresh) { reset(); return; }
+            list._suppressChatItemClickUntil = Date.now() + 700;
+            this.isPullToRefreshActive = true;
+            indicator.classList.remove('ready');
+            indicator.classList.add('loading');
+            indicator.style.height = '44px';
+            indicator.textContent = '正在更新回复…';
+            try {
+                await this.triggerAI(null, { pullToRefresh: true });
+                indicator.textContent = '更新完成';
+            } finally {
+                this.isPullToRefreshActive = false;
+                if (!this.app.currentChat && this.app.currentView === 'chats') this.app.render();
+                setTimeout(reset, 650);
+            }
+        };
+        list.addEventListener('touchend', finish, { passive: true });
+        list.addEventListener('touchcancel', reset, { passive: true });
     }
 
     _resetAiReplyTimeCursor() {
@@ -10417,6 +10613,19 @@ renderChatRoom(chat) {
         }, 0);
     }
 
+    _sendReplyToMainChat(message, chatId, chatName = '') {
+        if (!document.querySelector('#send_textarea')) return false;
+        window.dispatchEvent(new CustomEvent('phone:sendToChat', {
+            detail: {
+                message,
+                chatId,
+                chatName,
+                appendToExisting: true
+            }
+        }));
+        return true;
+    }
+
     // 🔥 发送按钮点击处理（抽取为独立方法，方便复用）
     handleSendClick(input) {
         // 🔥 终极全局防抖：抵抗 DOM 重绘带来的闭合变量失效与幽灵点击中止
@@ -10494,22 +10703,37 @@ renderChatRoom(chat) {
                 this.smartUpdateMessages(messages, userInfo, { chatId: targetChatId });
             }
 
+            const replyUpdateMode = String(window.VirtualPhone?.storage?.get?.('wechat_reply_update_mode') || 'pull_to_refresh');
+            if (replyUpdateMode === 'main_chat') {
+                const chatName = String(this.app.currentChat?.name || this.app.currentChat?.displayName || '').trim();
+                const mainChatMessage = chatName
+                    ? `我在微信中回复「${chatName}」：${text}`
+                    : `我在微信中回复：${text}`;
+                if (!this.isOnlineMode()) {
+                    this._notifyOnlineModeRequired();
+                    return;
+                }
+                if (!this._sendReplyToMainChat(mainChatMessage, targetChatId, chatName)) {
+                    this.app.phoneShell.showNotification('主聊天不可用', '微信消息已保存在会话中；打开主聊天后可重新选择更新方式', '⚠️');
+                    return;
+                }
+                this._clearPendingStateForChat(targetChatId);
+                this.app.phoneShell.showNotification('已填入主聊天', '主聊天生成后，回复中的微信内容会同步到微信会话', '💬');
+                return;
+            }
+
             const didEnqueue = this._enqueuePendingChat(targetChatId, {
                 shouldStartTimer: false,
-                shouldShowStatus: false
+                shouldShowStatus: false,
+                waitForPullToRefresh: true
             });
             if (!didEnqueue) {
                 this._notifyOnlineModeRequired();
                 return;
             }
-            // 🔥 核心修复：发送后若输入框仍保持焦点（移动端连续输入），不进入倒计时
-            if (document.activeElement === input) {
-                clearTimeout(this.batchTimer);
-                this.hideTypingStatus();
-            } else {
-                // 仅在输入框失焦时进入倒计时
-                this._restartPendingTimerIfNeeded(targetChatId);
-            }
+            // 手机微信消息只先排队保存；回复由会话列表下拉刷新显式触发。
+            clearTimeout(this.batchTimer);
+            this._restartPendingTimerIfNeeded(targetChatId);
 
         } else {
             // 输入框为空
@@ -10519,9 +10743,7 @@ renderChatRoom(chat) {
                     this._notifyOnlineModeRequired();
                     return;
                 }
-
-                // 还在6秒倒计时内：立刻触发AI（催更）
-                this.triggerAI(targetChatId, { forceCurrentChat: true });
+                this.app.phoneShell.showNotification('等待更新', '返回微信会话列表，下拉即可获取回复', '⬇️');
             } else {
                 // 倒计时已结束，检查是否有历史消息可以重试
                 const messages = this.app.wechatData.getMessages(this.app.currentChat.id);
@@ -10568,7 +10790,8 @@ renderChatRoom(chat) {
             }
 
             const forceCurrentChat = options?.forceCurrentChat === true && !!preferredChatId;
-            const chatIds = this._getPendingChatIdsOrdered(preferredChatId);
+            const includePullToRefreshPending = options?.pullToRefresh === true || forceCurrentChat;
+            const chatIds = this._getPendingChatIdsOrdered(preferredChatId, includePullToRefreshPending);
             if (chatIds.length === 0) return;
 
             for (const chatId of chatIds) {
@@ -11967,14 +12190,17 @@ renderChatRoom(chat) {
                 ? this.app.wechatData.getContact(targetChat.contactId)
                 : this.app.wechatData.getContactByName(targetChat?.name || charName);
             if (currentContact) {
+                const syncedProfile = await this._getWechatContactSyncProfile(currentContact, context);
                 const contactNotes = [
                     `【当前聊天对象档案】`,
-                    `联系人：${currentContact.name || targetChat?.name || charName}`
+                    `联系人：${currentContact.name || targetChat?.name || charName}`,
+                    `角色性格：${syncedProfile.personality}`,
+                    `对用户好感度：${syncedProfile.affection}`,
+                    `与用户关系：${syncedProfile.relationship}`,
+                    `同步来源：${syncedProfile.source}`,
+                    '回复时按该角色的性格和当前关系自然表现；好感度与关系以当前同步数据为准，标记为“未记录”时不要自行编造具体数值或既定关系。'
                 ];
 
-                if (currentContact.relation) {
-                    contactNotes.push(`关系：${currentContact.relation}`);
-                }
                 const supplementalSetting = this._getWechatSupplementalSetting(currentContact);
                 if (supplementalSetting) {
                     contactNotes.push(`补充微信设定：\n${supplementalSetting}`);
@@ -12013,7 +12239,7 @@ renderChatRoom(chat) {
                 };
             }
         } else {
-            contactProfileMessage = this._buildGroupSupplementalContactProfileMessage(targetChat);
+            contactProfileMessage = await this._buildGroupSupplementalContactProfileMessage(targetChat, context);
         }
 
         // ========================================

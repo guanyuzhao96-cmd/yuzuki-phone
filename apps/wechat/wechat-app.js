@@ -10,7 +10,7 @@
  * Copyright (c) yuzuki. All rights reserved.
  * ======================================================== */
 // 微信APP主程序
-import { ChatView } from './chat-view.js?v=20261002-x-forward-card';
+import { ChatView } from './chat-view.js?v=20261020-contact-profile-sync';
 import { ContactsView } from './contacts-view.js';
 import { MomentsView } from './moments-view.js?v=20261004-moments-image-cancel';
 import { WechatData } from './wechat-data.js?v=20261011-wallet-credit-repayment';
@@ -558,13 +558,33 @@ export class WechatApp {
 
 .wechat-chat-list {
     flex: 1;
+    position: relative;
     min-height: 0;
     background: #fff;
     overflow-y: auto;
+    overscroll-behavior-y: contain;
+    touch-action: pan-y;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none; /* Firefox */
     -ms-overflow-style: none; /* IE and Edge */
 }
+
+.wechat-chat-refresh-indicator {
+    height: 0;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #8a8a8e;
+    font-size: 12px;
+    line-height: 1;
+    transition: height .12s ease;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.wechat-chat-refresh-indicator.ready { color: #007aff; }
+.wechat-chat-refresh-indicator.loading { color: #007aff; }
 
 .wechat-chat-list::-webkit-scrollbar {
     display: none; /* Chrome, Safari */
@@ -6277,6 +6297,7 @@ export class WechatApp {
     renderChatList() {
         const chats = this.wechatData.getChatList();
         const storyTime = window.VirtualPhone?.timeManager?.getCurrentStoryTime?.() || {};
+        const pendingRefreshCount = this.chatView?.getPullToRefreshPendingCount?.() || 0;
 
         if (chats.length === 0) {
             return `
@@ -6289,6 +6310,7 @@ export class WechatApp {
 
         return `
             <div class="wechat-chat-list">
+                ${pendingRefreshCount > 0 || this.chatView?.isPullToRefreshActive ? `<div class="wechat-chat-refresh-indicator ${this.chatView?.isPullToRefreshActive ? 'loading' : ''}" style="height:${this.chatView?.isPullToRefreshActive ? '44px' : '0px'}">${this.chatView?.isPullToRefreshActive ? '正在更新回复…' : '下拉获取待回复消息'}</div>` : ''}
                 ${chats.map(chat => `
                     <div class="chat-item" data-chat-id="${chat.id}">
                         <div class="chat-avatar">
@@ -6472,12 +6494,19 @@ export class WechatApp {
         // 聊天列表点击
         wechatRoot.querySelectorAll?.('.wechat-chat-list .chat-item').forEach(item => {
             item.onclick = (e) => {
+                const list = e.currentTarget.closest('.wechat-chat-list');
+                if (Date.now() < Number(list?._suppressChatItemClickUntil || 0)) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return;
+                }
                 const chatId = e.currentTarget.dataset.chatId;
                 if (chatId) {
                     this.openChat(chatId);
                 }
             };
         });
+        this.chatView?.bindChatListPullToRefresh?.();
         this.bindChatListLongPressDelete();
 
         // "发现"页面现在直接是朋友圈，绑定朋友圈事件
@@ -8058,6 +8087,9 @@ export class WechatApp {
         const shellBg = this._getMainShellBackgroundConfig();
         const settingsContentStyle = shellBg.contentBgStyle || 'background: #ededed;';
         const useWechatWorldbook = window.VirtualPhone?.worldbookManager?.getEnabled?.('wechat') ?? true;
+        const replyUpdateMode = String(window.VirtualPhone?.storage?.get?.('wechat_reply_update_mode') || '') === 'main_chat'
+            ? 'main_chat'
+            : 'pull_to_refresh';
         const userInfo = this.wechatData.getUserInfo();
         const momentsBackground = String(userInfo?.momentsBackground || '').trim();
         const chatCssState = this._ensureChatCssPresetState();
@@ -8107,6 +8139,20 @@ export class WechatApp {
         </div>
     </div>
 </div>
+
+                <div style="background:#fff;border-radius:12px;margin:15px;padding:15px;">
+                    <div style="font-size:14px;font-weight:600;color:#333;margin-bottom:8px;">微信回复更新方式</div>
+                    <div style="font-size:12px;color:#777;line-height:1.5;margin-bottom:10px;">
+                        选择微信发送消息后，主聊天如何接收这一轮回复。
+                    </div>
+                    <select id="wechat-reply-update-mode" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:9px;background:#fff;color:#222;font-size:14px;">
+                        <option value="pull_to_refresh" ${replyUpdateMode === 'pull_to_refresh' ? 'selected' : ''}>微信会话列表下拉更新</option>
+                        <option value="main_chat" ${replyUpdateMode === 'main_chat' ? 'selected' : ''}>填入主聊天，随主聊天更新</option>
+                    </select>
+                    <div style="font-size:12px;color:#888;line-height:1.5;margin-top:8px;">
+                        下拉更新：消息先留在微信，回到会话列表下拉获取回复。主聊天更新：微信回复会填入酒馆主聊天；主聊天生成后，微信标签内容照常同步。
+                    </div>
+                </div>
 
                 <!-- 生成上下文设置 -->
                 <div style="background: #fff; border-radius: 12px; margin: 15px; padding: 15px;">
@@ -8567,6 +8613,12 @@ export class WechatApp {
 
         this.phoneShell.setContent(html);
         this.renderWechatWorldbookList();
+
+        document.getElementById('wechat-reply-update-mode')?.addEventListener('change', async (event) => {
+            const mode = event.target.value === 'main_chat' ? 'main_chat' : 'pull_to_refresh';
+            await window.VirtualPhone?.storage?.set?.('wechat_reply_update_mode', mode);
+            this.phoneShell.showNotification('已保存', mode === 'main_chat' ? '微信回复将填入主聊天' : '微信回复将在会话列表下拉时更新', '✅');
+        });
 
         // 返回按钮
         const backBtn = document.getElementById('back-from-settings');

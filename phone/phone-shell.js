@@ -243,6 +243,7 @@ export class PhoneShell {
             // 垂直滑动时的可滚动区域白名单
             const scrollableAreas =[
                 '.home-dashboard', '.home-app-cluster-scroll',
+                '.yzp-dossier main',
                 '.chat-messages', '#voice-chat-messages', '#video-chat-messages',
                 '.quick-reply-panel', '.quick-time-column', '.emoji-panel', '.emoji-scroll',
                 '.wechat-content', '.wechat-profile-edit-content', '.wechat-wallet-ledger-scroll', '.app-body', '.settings-app', '.app-name-custom-list', '.moments-list',

@@ -42,7 +42,7 @@ const ST_PHONE_VERSION = '1.6.9';
 const ST_PHONE_CSS_REVISION = '20261020-ios-complete-theme-v3';
 const ST_PHONE_APP_SWIPE_REVISION = '20261002-wechat-chat-return';
 const ST_PHONE_ALBUM_MODULE_REVISION = '20261006-story-image-outside-close';
-const ST_PHONE_WECHAT_MODULE_REVISION = '20261011-wallet-credit-repayment';
+const ST_PHONE_WECHAT_MODULE_REVISION = '20261020-wechat-contact-profile-sync';
 const ST_PHONE_WEIBO_MODULE_REVISION = '20261002-first-return-guard';
 const ST_PHONE_X_MODULE_REVISION = '20261010-publish-guard';
 const ST_PHONE_HONEY_ASSET_REVISION = '20261003-theme-media-recovery';
@@ -11566,11 +11566,14 @@ if (window.GGP_Loaded) {
 
             // 监听从微信发送到聊天的消息
             window.addEventListener('phone:sendToChat', (e) => {
-                const { message, chatId, chatName } = e.detail;
+                const { message, chatId, chatName, appendToExisting } = e.detail;
 
                 const textarea = document.querySelector('#send_textarea');
                 if (textarea) {
-                    textarea.value = message;
+                    const existingText = appendToExisting ? String(textarea.value || '').trimEnd() : '';
+                    textarea.value = existingText
+                        ? `${existingText}\n${message}`
+                        : message;
                     textarea.dispatchEvent(new Event('input', { bubbles: true }));
 
                     const sendButton = document.querySelector('#send_but');
