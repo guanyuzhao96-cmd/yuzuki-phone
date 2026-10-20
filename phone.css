@@ -9631,8 +9631,7 @@ input:checked + .toggle-slider:before {
     text-rendering: optimizeLegibility;
 }
 
-#phone-panel-content .phone-screen,
-#phone-panel-content .phone-screen * {
+#phone-panel-content .phone-screen {
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
     -webkit-tap-highlight-color: transparent;
 }
@@ -9815,10 +9814,6 @@ input:checked + .toggle-slider:before {
     #phone-panel-content .phone-screen .app-header {
         padding-right: 14px;
         padding-left: 14px;
-    }
-
-    #phone-panel-content .phone-screen button:not(.app-icon):not(.dock-app) {
-        min-height: 38px;
     }
 
     #phone-panel-content .phone-screen :is(input, select, textarea) {
