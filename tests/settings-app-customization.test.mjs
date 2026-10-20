@@ -18,8 +18,8 @@ test('X participates in app icon, name, and dock customization', () => {
     assert.match(settingsSource, /renderDockConfig\(\)[\s\S]*this\._getDefaultAppsForCustomization\(\)/);
 });
 
-test('X uses the bundled phone icon as its default', () => {
-    assert.match(appsSource, /x:\s*new URL\('\.\.\/phone\/X\.png', import\.meta\.url\)\.href/);
+test('X uses the bundled iOS-style vector icon as its default', () => {
+    assert.match(appsSource, /x:\s*new URL\('\.\.\/assets\/icons\/ios\/x\.svg\?v=1\.6\.9', import\.meta\.url\)\.href/);
     assert.doesNotMatch(appsSource, /apps\/x\/assets\/x-icon\.png/);
 });
 

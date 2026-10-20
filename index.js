@@ -21,13 +21,13 @@ import {
     getPhoneFloatingEntryReceiptFile,
     PHONE_FLOATING_ENTRY_DEFAULT_STYLE,
     PhoneFloatingEntry
-} from './phone/floating-entry.js';
+} from './phone/floating-entry.js?v=1.6.9&r=20261020-ios-icons';
 import {
     getOfflineWechatPaymentLedgerCopy,
     markCompleteOfflineWechatPaymentBoundaries,
     parseOfflineWechatPayments,
     renderOfflineWechatPaymentReceipt
-} from './apps/wechat/offline-payment.js?v=1.6.1&r=20261011-payment-boundaries-and-flexible-years';
+} from './apps/wechat/offline-payment.js?v=1.6.9&r=20261020-ios-receipts';
 import { parseWechatVoiceContent } from './apps/wechat/voice-text.js';
 import { StoryImageAutoScheduler } from './apps/album/story-image-auto-scheduler.js';
 import {
@@ -38,8 +38,8 @@ import {
 } from './apps/mofo/mofo-renderer.js';
 
 const ST_PHONE_BASE_URL = new URL('./', import.meta.url).href;
-const ST_PHONE_VERSION = '1.6.8';
-const ST_PHONE_CSS_REVISION = '20261020-ios-unified-theme-v2';
+const ST_PHONE_VERSION = '1.6.9';
+const ST_PHONE_CSS_REVISION = '20261020-ios-complete-theme-v3';
 const ST_PHONE_APP_SWIPE_REVISION = '20261002-wechat-chat-return';
 const ST_PHONE_ALBUM_MODULE_REVISION = '20261006-story-image-outside-close';
 const ST_PHONE_WECHAT_MODULE_REVISION = '20261011-wallet-credit-repayment';
@@ -147,9 +147,11 @@ const WECHAT_INITIAL_ENABLED_OFFLINE_KEYS = [
 const WECHAT_MESSAGE_SOUND_URL = new URL('./assets/sounds/iphone-message-notification.mp3', ST_PHONE_BASE_URL).href;
 const ST_PHONE_CURRENT_UPDATE = {
     version: ST_PHONE_VERSION,
-    date: '2026-10-16',
+    date: '2026-10-20',
     items: [
-        '【优化】完善 Google Vertex AI 跟随酒馆的兼容性，修复关闭独立 API 后使用服务账号模式请求失败的问题。'
+        '【图标更新】替换所有默认桌面应用与悬浮入口图标，并统一付款凭证顶部素材。',
+        '【背景更新】更新默认壁纸，并迁移旧版内置默认壁纸与默认应用图标。',
+        '【样式更新】将手机外壳、动态岛、状态栏、Dock、应用导航、卡片、弹窗和表单统一为 iOS 风格。'
     ]
 };
 
@@ -1465,7 +1467,7 @@ if (window.GGP_Loaded) {
             imageGenerationManagerModule,
             worldbookManagerModule
         ] = await Promise.all([
-            import('./config/apps.js'),
+            import('./config/apps.js?v=1.6.9'),
             import('./config/storage.js?v=20261006-story-upload-console-cleanup'),
             import('./config/api-manager.js?v=20261009-unified-sse-parser'),
             import('./config/time-manager.js'),    // 👈 取消懒加载

@@ -15,16 +15,16 @@ test('floating entry exposes nine numbered styles with the renamed assets', () =
         PHONE_FLOATING_ENTRY_STYLES.map(({ label, file, receiptFile }) => ({ label, file, receiptFile })),
         Array.from({ length: 9 }, (_, index) => ({
             label: `样式${index + 1}`,
-            file: `phone/sjxf${index + 1}.png`,
-            receiptFile: `phone/sjxf${index + 1}_xp.png`
+            file: `assets/icons/ios/floating-${index + 1}.svg`,
+            receiptFile: `assets/icons/ios/receipt-header-${index + 1}.svg`
         }))
     );
 });
 
 test('floating entry receipt asset follows the selected style with a silver fallback', () => {
-    assert.equal(getPhoneFloatingEntryReceiptFile('gold'), 'phone/sjxf1_xp.png');
-    assert.equal(getPhoneFloatingEntryReceiptFile('style-9'), 'phone/sjxf9_xp.png');
-    assert.equal(getPhoneFloatingEntryReceiptFile('unknown'), 'phone/sjxf4_xp.png');
+    assert.equal(getPhoneFloatingEntryReceiptFile('gold'), 'assets/icons/ios/receipt-header-1.svg');
+    assert.equal(getPhoneFloatingEntryReceiptFile('style-9'), 'assets/icons/ios/receipt-header-9.svg');
+    assert.equal(getPhoneFloatingEntryReceiptFile('unknown'), 'assets/icons/ios/receipt-header-4.svg');
 });
 
 test('floating entry visibility correction is event-driven instead of polling', () => {

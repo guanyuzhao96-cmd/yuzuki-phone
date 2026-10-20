@@ -7,7 +7,7 @@ const PAYMENT_ITEM_AMOUNT_LABEL_REGEX = /^支付金额$/;
 const PAYMENT_TOTAL_LABEL_REGEX = /^(?:总金额|实付金额|合计|总计)$/;
 const PAYMENT_LINE_REGEX = /^\s*(.+?)\s*[:：]\s*(?:人民币|RMB|CNY)?\s*[¥￥]?\s*(-?\d[\d,]*(?:\.\d{1,2})?)\s*(?:元)?\s*$/i;
 const PAYMENT_AMOUNT_VALUE_REGEX = /^\s*(?:人民币|RMB|CNY)?\s*[¥￥]?\s*(-?\d[\d,]*(?:\.\d{1,2})?)\s*(?:元)?\s*$/i;
-const DEFAULT_PAYMENT_RECEIPT_HEADER_IMAGE_URL = new URL('../../phone/sjxf4_xp.png', import.meta.url).href;
+const DEFAULT_PAYMENT_RECEIPT_HEADER_IMAGE_URL = new URL('../../assets/icons/ios/receipt-header-4.svg?v=1.6.9', import.meta.url).href;
 const DEFAULT_PAYMENT_RECEIPT_STYLE_ID = 'silver';
 
 function maskReasoningBlocks(text) {

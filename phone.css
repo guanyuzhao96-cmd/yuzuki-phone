@@ -9833,3 +9833,278 @@ input:checked + .toggle-slider:before {
 /* ========================================================
    ST PHONE IOS THEME END
    ======================================================== */
+/* Unified iOS-inspired skin for Yuzuki Phone.
+   Applied after the extension and lazily loaded app stylesheets. */
+#phone-panel {
+  --ios-blue: #007aff;
+  --ios-green: #34c759;
+  --ios-red: #ff3b30;
+  --ios-label: #1c1c1e;
+  --ios-secondary-label: #6d6d72;
+  --ios-separator: rgba(60, 60, 67, .18);
+  --ios-system-bg: #f2f2f7;
+  --ios-card: #fff;
+  --ios-radius: 14px;
+  color: var(--ios-label);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+#phone-panel .phone-body-panel {
+  background: linear-gradient(145deg, #272a31 0%, #101115 42%, #050607 100%) !important;
+  border: 1px solid rgba(255,255,255,.18) !important;
+  border-radius: 50px !important;
+  padding: 5px !important;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.12), 0 22px 70px rgba(0,0,0,.46), 0 3px 12px rgba(0,0,0,.24) !important;
+}
+#phone-panel .phone-punch-hole {
+  width: 122px !important;
+  height: 34px !important;
+  left: 50% !important;
+  top: 10px !important;
+  transform: translateX(-50%) !important;
+  border-radius: 999px !important;
+  background: #050506 !important;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.045), 0 1px 3px rgba(0,0,0,.35) !important;
+}
+#phone-panel .phone-punch-hole::before {
+  left: auto !important; right: 13px !important;
+  width: 12px !important; height: 12px !important;
+  background: radial-gradient(circle at 35% 35%, #293c63 0%, #111a2d 50%, #07080b 100%) !important;
+  box-shadow: inset 0 0 2px rgba(155,190,255,.55), 0 0 0 2px #111 !important;
+}
+#phone-panel .phone-punch-hole::after { display: none !important; }
+#phone-panel .phone-statusbar {
+  top: 3px !important;
+  left: 6px !important; right: 6px !important;
+  height: 42px !important;
+  padding: 0 13px !important;
+  color: #fff !important;
+  font-family: inherit !important;
+  font-size: 13px !important;
+  font-weight: 650 !important;
+  text-shadow: 0 1px 3px rgba(0,0,0,.35);
+}
+#phone-panel .statusbar-left { margin-left: 0 !important; }
+#phone-panel .statusbar-left .time { color: #fff !important; font-size: 13px !important; font-weight: 650 !important; }
+#phone-panel .phone-statusbar .phone-wifi-signal,
+#phone-panel .phone-statusbar .battery-icon { color: #fff !important; filter: drop-shadow(0 1px 2px rgba(0,0,0,.28)); }
+#phone-panel .phone-statusbar .battery-body { border-color: currentColor !important; }
+#phone-panel .phone-statusbar .battery-level { background: #fff !important; }
+#phone-panel .phone-statusbar .battery-text { color: #17181a !important; text-shadow: none !important; }
+#phone-panel .phone-screen {
+  overflow: hidden !important;
+  border-radius: 44px !important;
+  background: var(--ios-system-bg) !important;
+}
+#phone-panel .phone-home-indicator {
+  z-index: 70 !important;
+  bottom: 9px !important;
+  width: 112px !important;
+  height: 4px !important;
+  border-radius: 999px !important;
+  background: rgba(255,255,255,.94) !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,.2) !important;
+}
+#phone-panel .phone-home-indicator::before { display: none !important; }
+#phone-panel .phone-screen .home-screen {
+  background: #3c4b79 !important;
+  color: #fff !important;
+  font-family: inherit !important;
+}
+#phone-panel .phone-screen .home-screen .wallpaper {
+  display: block !important;
+  position: absolute !important;
+  inset: 0 !important;
+  background-size: cover !important;
+  background-position: center !important;
+}
+#phone-panel .phone-screen .home-time,
+#phone-panel .phone-screen .home-screen .time-large,
+#phone-panel .phone-screen .home-screen .date,
+#phone-panel .phone-screen .app-name {
+  color: #fff !important;
+  text-shadow: 0 1px 8px rgba(20,24,48,.28) !important;
+}
+#phone-panel .phone-screen .home-screen .app-name { font-size: 11px !important; font-weight: 550 !important; }
+#phone-panel .phone-screen .app-icon-bg.custom-icon,
+#phone-panel .phone-screen .home-app-squircle.custom-icon,
+#phone-panel .phone-screen .home-social-icon.custom-icon,
+#phone-panel .phone-screen .home-widget-icon.custom-icon,
+#phone-panel .phone-screen .home-mini-icon.custom-icon,
+#phone-panel .phone-screen .home-feature-icon.custom-icon,
+#phone-panel .phone-screen .home-settings-icon.custom-icon,
+#phone-panel .phone-screen .dock-app {
+  overflow: hidden !important;
+  border-radius: 23% !important;
+  box-shadow: 0 5px 12px rgba(20,28,65,.25), inset 0 0 0 1px rgba(255,255,255,.18) !important;
+}
+#phone-panel .phone-screen .app-icon-bg.custom-icon,
+#phone-panel .phone-screen .home-app-squircle.custom-icon,
+#phone-panel .phone-screen .home-social-icon.custom-icon { background-size: cover !important; }
+#phone-panel .phone-screen .home-screen .dock {
+  padding: 11px 13px !important;
+  gap: 12px !important;
+  min-height: 72px !important;
+  border: 1px solid rgba(255,255,255,.3) !important;
+  border-radius: 26px !important;
+  background: rgba(246,247,252,.3) !important;
+  box-shadow: 0 12px 32px rgba(18,25,55,.2), inset 0 1px 0 rgba(255,255,255,.35) !important;
+  backdrop-filter: blur(28px) saturate(160%) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(160%) !important;
+}
+#phone-panel .phone-screen .home-dashboard .home-time-card,
+#phone-panel .phone-screen .home-dashboard .home-widget-card,
+#phone-panel .phone-screen .home-dashboard .home-social-card,
+#phone-panel .phone-screen .home-dashboard .home-settings-card,
+#phone-panel .phone-screen .home-dashboard .home-diary-card,
+#phone-panel .phone-screen .home-dashboard .home-app-cluster,
+#phone-panel .phone-screen .home-dashboard .home-feature-card {
+  border: 1px solid rgba(255,255,255,.28) !important;
+  border-radius: 22px !important;
+  background-color: rgba(255,255,255,.22) !important;
+  box-shadow: 0 12px 28px rgba(28,35,70,.16), inset 0 1px 0 rgba(255,255,255,.25) !important;
+  color: #fff !important;
+  backdrop-filter: blur(22px) saturate(145%) !important;
+  -webkit-backdrop-filter: blur(22px) saturate(145%) !important;
+}
+#phone-panel .phone-screen .home-dashboard .home-card-title,
+#phone-panel .phone-screen .home-dashboard .home-card-desc,
+#phone-panel .phone-screen .home-dashboard .home-time-date,
+#phone-panel .phone-screen .home-dashboard .home-social-name { color: #fff !important; }
+#phone-panel .phone-screen .home-dashboard .home-card-chevron,
+#phone-panel .phone-screen .home-dashboard .home-settings-chevron { color: rgba(255,255,255,.82) !important; }
+
+/* App pages use the iOS grouped-background and card language. */
+#phone-panel .phone-screen :is(
+  .wechat-app,.weibo-app,.xapp-root,.honey-app,.mofo-app,.wangxiang-app,
+  .diary-app,.music-app,.album-app,.calendar-app,.yzp-calendar-app,.games-app,.settings-app,
+  .yzp-dossier,.phone-app,.phone-view,.settings-view,.calendar-view
+) {
+  color: var(--ios-label);
+  font-family: inherit;
+}
+#phone-panel .phone-screen :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),textarea,select) {
+  border-color: #c6c6cb;
+  border-radius: 11px;
+  background-color: rgba(255,255,255,.96);
+  color: var(--ios-label);
+  font-family: inherit;
+}
+#phone-panel .phone-screen :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),textarea,select):focus {
+  border-color: var(--ios-blue);
+  outline: 3px solid rgba(0,122,255,.16);
+}
+#phone-panel .phone-screen :is(button,[role="button"],[role="tab"]) {
+  border-radius: 11px;
+  font-family: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+#phone-panel .phone-screen :is(
+  [class*="-header"],[class*="-topbar"],[class*="-nav-bar"],[class*="-toolbar"]
+) {
+  color: var(--ios-label);
+  border-color: var(--ios-separator);
+}
+#phone-panel .phone-screen :is(
+  [class*="-dialog"],[class*="-modal"],[class*="-sheet"]
+) {
+  border: 1px solid var(--ios-separator);
+  border-radius: 18px;
+  background-color: #fff;
+  box-shadow: 0 12px 36px rgba(0,0,0,.16);
+}
+#phone-panel .phone-screen :is(.diary-app,.music-app,.weibo-app,.wechat-app,.honey-app,.album-app,.wangxiang-app,.games-app,.yzp-dossier,.xapp-root,.settings-app,.calendar-app,.yzp-calendar-app) {
+  background-color: var(--ios-system-bg);
+}
+#phone-panel .phone-screen :is(
+  .diary-app,.music-app,.weibo-app,.wechat-app,.honey-app,.album-app,.wangxiang-app,
+  .games-app,.yzp-dossier,.xapp-root,.settings-app,.calendar-app,.yzp-calendar-app
+) :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),textarea,select) {
+  border: 1px solid #c6c6cb !important;
+  border-radius: 11px !important;
+  background: rgba(255,255,255,.96) !important;
+  color: var(--ios-label) !important;
+  font: inherit !important;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,.035) !important;
+}
+#phone-panel .phone-screen :is(
+  .diary-app,.music-app,.weibo-app,.wechat-app,.honey-app,.album-app,.wangxiang-app,
+  .games-app,.yzp-dossier,.xapp-root,.settings-app,.calendar-app,.yzp-calendar-app
+) :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),textarea,select):focus {
+  border-color: var(--ios-blue) !important;
+  outline: 3px solid rgba(0,122,255,.16) !important;
+  outline-offset: 0 !important;
+}
+#phone-panel .phone-screen :is(
+  .weibo-nav-bar,.xapp-top-glass,.xapp-topbar,.xapp-compose-header,.xapp-detail-header,
+  .games-topbar,.diary-app > header,.music-app > header,.album-app > header,
+  .yzp-calendar-header,.yzp-calendar-settings-header,.settings-app > header,.wangxiang-app > header
+) {
+  color: var(--ios-label);
+  border-color: var(--ios-separator) !important;
+  background: rgba(255,255,255,.92) !important;
+  box-shadow: 0 1px 0 var(--ios-separator) !important;
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+}
+#phone-panel .phone-screen :is(.yzp-dossier header,.yzp-dossier article,.yzp-dossier details,.yzp-calendar-board,.yzp-calendar-memo-panel,.yzp-calendar-add-sheet,.yzp-calendar-settings-section) {
+  border-color: var(--ios-separator) !important;
+  border-radius: var(--ios-radius) !important;
+  background: var(--ios-card) !important;
+  color: var(--ios-label) !important;
+  box-shadow: 0 1px 2px rgba(0,0,0,.035) !important;
+}
+#phone-panel .phone-screen :is(.yzp-dossier header,.yzp-calendar-header,.yzp-calendar-settings-header) { position: relative; padding-top: 16px !important; }
+#phone-panel .phone-screen .yzp-dossier button,
+#phone-panel .phone-screen .yzp-calendar-app button,
+#phone-panel .phone-screen .games-topbar button,
+#phone-panel .phone-screen .xapp-root button:not(.xapp-compose-publish):not(.xapp-compose-button),
+#phone-panel .phone-screen .diary-app button:not(.diary-primary-button) {
+  min-height: 40px;
+  border: 1px solid var(--ios-separator) !important;
+  border-radius: 11px !important;
+  background: #fff !important;
+  color: var(--ios-blue) !important;
+  font: inherit;
+  box-shadow: 0 1px 2px rgba(0,0,0,.045) !important;
+}
+#phone-panel .phone-screen :is(.xapp-compose-publish,.xapp-compose-button,.diary-primary-button) {
+  border: 0 !important;
+  border-radius: 13px !important;
+  background: var(--ios-blue) !important;
+  color: #fff !important;
+}
+#phone-panel .phone-screen :is(.xapp-feed-list,.xapp-settings-scroll,.xapp-detail-scroll,.xapp-compose-scroll) {
+  background: var(--ios-system-bg) !important;
+}
+#phone-panel .phone-screen .xapp-post,
+#phone-panel .phone-screen .xapp-settings-section,
+#phone-panel .phone-screen .xapp-profile-posts {
+  border-color: var(--ios-separator) !important;
+  background: #fff !important;
+}
+#phone-panel .phone-screen :is(.xapp-feed-tab,.xapp-profile-tab) { color: var(--ios-secondary-label); }
+#phone-panel .phone-screen :is(.xapp-feed-tab.is-active,.xapp-profile-tab.is-active) { color: var(--ios-blue) !important; }
+#phone-panel .phone-screen :is(.home-social-card,.home-settings-card,.home-diary-card) .app-badge,
+#phone-panel .phone-screen .app-badge {
+  min-width: 18px !important;
+  min-height: 18px !important;
+  border: 1.5px solid #fff !important;
+  border-radius: 999px !important;
+  background: var(--ios-red) !important;
+  box-shadow: none !important;
+  color: #fff !important;
+  font-family: inherit !important;
+}
+#phone-panel .phone-screen button,
+#phone-panel .phone-screen [role="button"] {
+  transition: filter .16s ease, transform .16s ease, opacity .16s ease;
+}
+#phone-panel .phone-screen button:active,
+#phone-panel .phone-screen [role="button"]:active {
+  filter: brightness(.94);
+}
+@media (prefers-reduced-motion: reduce) {
+  #phone-panel .phone-screen *,
+  #phone-panel .phone-body-panel { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}

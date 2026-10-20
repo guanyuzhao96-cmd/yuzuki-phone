@@ -786,7 +786,27 @@ export class ImageUploadManager {
     // ========================================
     // 📖 读取
     // ========================================
-    getWallpaper() { return this.cache.wallpaper; }
-    getAppIcon(appId) { return this.cache.appIcons[appId]; }
+    getWallpaper() {
+        const wallpaper = this.cache.wallpaper;
+        if (!wallpaper) return wallpaper;
+        let wallpaperPath = String(wallpaper).trim();
+        try {
+            wallpaperPath = decodeURIComponent(wallpaperPath);
+        } catch (_) {}
+        if (/(?:^|\/)phone\/手机背景\.jpg(?:[?#]|$)/i.test(wallpaperPath)) return null;
+        return wallpaper;
+    }
+    getAppIcon(appId) {
+        const icon = this.cache.appIcons[appId];
+        if (!icon) return icon;
+        let iconPath = String(icon).trim();
+        try {
+            iconPath = decodeURIComponent(iconPath);
+        } catch (_) {}
+        if (/(?:^|\/)phone\/(?:微信|微博|X|蜜语|魔坊|万象|电话|日记|音乐|相册|日历|游戏|设置)\.png(?:[?#]|$)/i.test(iconPath)) {
+            return null;
+        }
+        return icon;
+    }
     getAvatar(characterId) { return this.cache.avatars[characterId]; }
 }

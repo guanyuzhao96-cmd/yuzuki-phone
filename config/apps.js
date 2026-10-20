@@ -11,25 +11,26 @@
  * ======================================================== */
 // APP配置文件
 export const DEFAULT_APP_ICONS = Object.freeze({
-    wechat: new URL('../phone/微信.png', import.meta.url).href,
-    weibo: new URL('../phone/微博.png', import.meta.url).href,
-    x: new URL('../phone/X.png', import.meta.url).href,
-    honey: new URL('../phone/蜜语.png', import.meta.url).href,
-    mofo: new URL('../phone/魔坊.png', import.meta.url).href,
-    wangxiang: new URL('../phone/万象.png', import.meta.url).href,
-    phone: new URL('../phone/电话.png', import.meta.url).href,
-    diary: new URL('../phone/日记.png', import.meta.url).href,
-    music: new URL('../phone/音乐.png', import.meta.url).href,
-    album: new URL('../phone/相册.png', import.meta.url).href,
-    calendar: new URL('../phone/日历.png', import.meta.url).href,
-    games: new URL('../phone/游戏.png', import.meta.url).href,
-    settings: new URL('../phone/设置.png', import.meta.url).href
+    dossier: new URL('../assets/icons/ios/dossier.svg?v=1.6.9', import.meta.url).href,
+    wechat: new URL('../assets/icons/ios/wechat.svg?v=1.6.9', import.meta.url).href,
+    weibo: new URL('../assets/icons/ios/weibo.svg?v=1.6.9', import.meta.url).href,
+    x: new URL('../assets/icons/ios/x.svg?v=1.6.9', import.meta.url).href,
+    honey: new URL('../assets/icons/ios/honey.svg?v=1.6.9', import.meta.url).href,
+    mofo: new URL('../assets/icons/ios/mofo.svg?v=1.6.9', import.meta.url).href,
+    wangxiang: new URL('../assets/icons/ios/wangxiang.svg?v=1.6.9', import.meta.url).href,
+    phone: new URL('../assets/icons/ios/phone.svg?v=1.6.9', import.meta.url).href,
+    diary: new URL('../assets/icons/ios/diary.svg?v=1.6.9', import.meta.url).href,
+    music: new URL('../assets/icons/ios/music.svg?v=1.6.9', import.meta.url).href,
+    album: new URL('../assets/icons/ios/album.svg?v=1.6.9', import.meta.url).href,
+    calendar: new URL('../assets/icons/ios/calendar.svg?v=1.6.9', import.meta.url).href,
+    games: new URL('../assets/icons/ios/games.svg?v=1.6.9', import.meta.url).href,
+    settings: new URL('../assets/icons/ios/settings.svg?v=1.6.9', import.meta.url).href
 });
 
-export const DEFAULT_PHONE_WALLPAPER = new URL('../phone/手机背景.jpg', import.meta.url).href;
+export const DEFAULT_PHONE_WALLPAPER = new URL('../assets/wallpapers/ios-default.svg?v=1.6.9', import.meta.url).href;
 
 export const APPS = [
-    { id: 'dossier', name: '角色档案', icon: '📇', color: '#547c72', data: {} },
+    { id: 'dossier', name: '角色档案', icon: '📇', defaultIcon: DEFAULT_APP_ICONS.dossier, color: '#547c72', data: {} },
     // 第一行
     {
         id: 'wechat',

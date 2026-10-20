@@ -10,7 +10,7 @@
  * Copyright (c) yuzuki. All rights reserved.
  * ======================================================== */
 // 主屏幕
-import { APPS, PHONE_CONFIG } from '../config/apps.js'; // 🔥🔥🔥 这一行必须改！
+import { APPS, PHONE_CONFIG } from '../config/apps.js?v=1.6.9'; // 🔥🔥🔥 这一行必须改！
 
 const CARD_LAYOUT_CUSTOM_CSS_KEY = 'phone-card-layout-custom-css';
 const CARD_LAYOUT_CUSTOM_STYLE_ID = 'phone-card-layout-custom-css-style';
@@ -91,7 +91,15 @@ export class HomeScreen {
 
     _getWallpaperImage() {
         try {
-            return window.VirtualPhone?.imageManager?.getWallpaper?.() || PHONE_CONFIG.defaultWallpaper;
+            const savedWallpaper = String(window.VirtualPhone?.imageManager?.getWallpaper?.() || '').trim();
+            let wallpaperPath = savedWallpaper;
+            try {
+                wallpaperPath = decodeURIComponent(wallpaperPath);
+            } catch (_) {}
+            if (!savedWallpaper || /(?:phone\/)?手机背景\.jpg(?:[?#]|$)/i.test(wallpaperPath)) {
+                return PHONE_CONFIG.defaultWallpaper;
+            }
+            return savedWallpaper;
         } catch (e) {
             console.warn('获取壁纸失败:', e);
             return PHONE_CONFIG.defaultWallpaper;
@@ -239,7 +247,18 @@ export class HomeScreen {
 
     _getAppIconImage(app) {
         if (!app) return null;
-        return this._getCustomIcon(app.id) || String(app.defaultIcon || '').trim() || null;
+        const defaultIcon = String(app.defaultIcon || '').trim() || null;
+        const customIcon = this._getCustomIcon(app.id);
+        if (!customIcon) return defaultIcon;
+
+        let customIconPath = String(customIcon).trim();
+        try {
+            customIconPath = decodeURIComponent(customIconPath);
+        } catch (_) {}
+        if (/(?:^|\/)phone\/(?:微信|微博|X|蜜语|魔坊|万象|电话|日记|音乐|相册|日历|游戏|设置)\.png(?:[?#]|$)/i.test(customIconPath)) {
+            return defaultIcon;
+        }
+        return customIcon;
     }
 
     _buildCustomIconStyle(iconUrl, { fit = 'contain' } = {}) {

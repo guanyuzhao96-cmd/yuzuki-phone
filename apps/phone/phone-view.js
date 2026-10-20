@@ -14,7 +14,7 @@
 // ========================================
 import { applyPhoneTagFilter } from '../../config/tag-filter.js';
 import { readPhoneContextLimit } from '../../config/context-settings.js';
-import { PHONE_CONFIG } from '../../config/apps.js';
+import { PHONE_CONFIG } from '../../config/apps.js?v=1.6.9';
 import { formatWechatChatListTime } from '../wechat/chat-list-time.js';
 
 export class PhoneCallView {

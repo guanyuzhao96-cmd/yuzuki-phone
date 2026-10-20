@@ -14,7 +14,7 @@ import { ImageUploadManager } from './image-upload.js?v=20261006-story-upload-co
 import { ImageCropper } from './image-cropper.js';
 import { AlbumData } from '../album/album-data.js';
 import { AlbumImagePicker } from '../album/album-image-picker.js';
-import { DEFAULT_APP_ICONS, PHONE_CONFIG } from '../../config/apps.js';
+import { DEFAULT_APP_ICONS, PHONE_CONFIG } from '../../config/apps.js?v=1.6.9';
 import * as PhoneTagFilter from '../../config/tag-filter.js';
 import {
     PHONE_FLOATING_ENTRY_DEFAULT_STYLE,
@@ -237,6 +237,7 @@ export class SettingsApp {
 
     _getDefaultAppsForCustomization() {
         return [
+            { id: 'dossier', name: '角色档案', icon: '📇', color: '#547c72', defaultIcon: DEFAULT_APP_ICONS.dossier },
             { id: 'wechat', name: '微信', icon: '💬', color: '#07c160', defaultIcon: DEFAULT_APP_ICONS.wechat },
             { id: 'weibo', name: '微博', icon: '👁️‍🗨️', color: '#ff8200', defaultIcon: DEFAULT_APP_ICONS.weibo },
             { id: 'x', name: 'X', icon: 'X', color: '#000000', defaultIcon: DEFAULT_APP_ICONS.x },

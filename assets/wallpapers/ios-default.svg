@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="base" x1="0" y1="0" x2=".82" y2="1"><stop stop-color="#243b72"/><stop offset=".42" stop-color="#786da8"/><stop offset="1" stop-color="#f2b7a9"/></linearGradient>
+    <radialGradient id="glowA" cx=".8" cy=".15" r=".66"><stop stop-color="#8fe3e1" stop-opacity=".8"/><stop offset="1" stop-color="#8fe3e1" stop-opacity="0"/></radialGradient>
+    <radialGradient id="glowB" cx=".1" cy=".8" r=".7"><stop stop-color="#f6c8a1" stop-opacity=".9"/><stop offset="1" stop-color="#f6c8a1" stop-opacity="0"/></radialGradient>
+    <filter id="blur"><feGaussianBlur stdDeviation="32"/></filter>
+  </defs>
+  <rect width="390" height="844" fill="url(#base)"/><rect width="390" height="844" fill="url(#glowA)"/><rect width="390" height="844" fill="url(#glowB)"/>
+  <g filter="url(#blur)" opacity=".72"><ellipse cx="326" cy="356" rx="180" ry="112" fill="#5ad3cf" transform="rotate(-35 326 356)"/><ellipse cx="72" cy="570" rx="174" ry="102" fill="#f8a7b6" transform="rotate(35 72 570)"/><ellipse cx="251" cy="746" rx="195" ry="95" fill="#ffe2b1" transform="rotate(-18 251 746)"/></g>
+  <path d="M-50 484C52 401 151 402 232 460s143 66 222-4v209c-89 47-166 42-251-8S39 601-50 697Z" fill="#344b7d" fill-opacity=".24"/><rect width="390" height="844" fill="#15223d" fill-opacity=".13"/>
+</svg>

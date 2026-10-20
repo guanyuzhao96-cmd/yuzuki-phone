@@ -7,15 +7,15 @@ export const PHONE_FLOATING_ENTRY_POSITION_KEY = 'phone-floating-entry-position'
 export const PHONE_FLOATING_ENTRY_DEFAULT_STYLE = 'silver';
 
 export const PHONE_FLOATING_ENTRY_STYLES = Object.freeze([
-    { id: 'gold', label: '样式1', file: 'phone/sjxf1.png', receiptFile: 'phone/sjxf1_xp.png' },
-    { id: 'blue', label: '样式2', file: 'phone/sjxf2.png', receiptFile: 'phone/sjxf2_xp.png' },
-    { id: 'green', label: '样式3', file: 'phone/sjxf3.png', receiptFile: 'phone/sjxf3_xp.png' },
-    { id: 'silver', label: '样式4', file: 'phone/sjxf4.png', receiptFile: 'phone/sjxf4_xp.png' },
-    { id: 'purple', label: '样式5', file: 'phone/sjxf5.png', receiptFile: 'phone/sjxf5_xp.png' },
-    { id: 'black', label: '样式6', file: 'phone/sjxf6.png', receiptFile: 'phone/sjxf6_xp.png' },
-    { id: 'style-7', label: '样式7', file: 'phone/sjxf7.png', receiptFile: 'phone/sjxf7_xp.png' },
-    { id: 'style-8', label: '样式8', file: 'phone/sjxf8.png', receiptFile: 'phone/sjxf8_xp.png' },
-    { id: 'style-9', label: '样式9', file: 'phone/sjxf9.png', receiptFile: 'phone/sjxf9_xp.png' }
+    { id: 'gold', label: '样式1', file: 'assets/icons/ios/floating-1.svg', receiptFile: 'assets/icons/ios/receipt-header-1.svg' },
+    { id: 'blue', label: '样式2', file: 'assets/icons/ios/floating-2.svg', receiptFile: 'assets/icons/ios/receipt-header-2.svg' },
+    { id: 'green', label: '样式3', file: 'assets/icons/ios/floating-3.svg', receiptFile: 'assets/icons/ios/receipt-header-3.svg' },
+    { id: 'silver', label: '样式4', file: 'assets/icons/ios/floating-4.svg', receiptFile: 'assets/icons/ios/receipt-header-4.svg' },
+    { id: 'purple', label: '样式5', file: 'assets/icons/ios/floating-5.svg', receiptFile: 'assets/icons/ios/receipt-header-5.svg' },
+    { id: 'black', label: '样式6', file: 'assets/icons/ios/floating-6.svg', receiptFile: 'assets/icons/ios/receipt-header-6.svg' },
+    { id: 'style-7', label: '样式7', file: 'assets/icons/ios/floating-7.svg', receiptFile: 'assets/icons/ios/receipt-header-7.svg' },
+    { id: 'style-8', label: '样式8', file: 'assets/icons/ios/floating-8.svg', receiptFile: 'assets/icons/ios/receipt-header-8.svg' },
+    { id: 'style-9', label: '样式9', file: 'assets/icons/ios/floating-9.svg', receiptFile: 'assets/icons/ios/receipt-header-9.svg' }
 ]);
 
 const FLOATING_STYLE_MAP = new Map(PHONE_FLOATING_ENTRY_STYLES.map(item => [item.id, item]));

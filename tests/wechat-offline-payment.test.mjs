@@ -212,7 +212,7 @@ test('offline payment tags render only with explicit closing boundaries', () => 
 </p>`);
 
     assert.match(standard, /class="st-phone-payment-receipt"/);
-    assert.match(standard, /sjxf4_xp\.png/);
+    assert.match(standard, /receipt-header-4\.svg/);
     assert.match(standard, /2026\.10\.08/);
     assert.match(standard, /晚餐/);
     assert.match(standard, /¥ 35\.80/);
@@ -281,7 +281,7 @@ test('offline payment receipt uses the fixed layout copy and scoped CSS', () => 
         amount: 16
     });
 
-    assert.match(receipt, /sjxf4_xp\.png/);
+    assert.match(receipt, /receipt-header-4\.svg/);
     assert.match(receipt, /data-phone-floating-style="silver"/);
     assert.match(receipt, /STORE\./);
     assert.match(receipt, />线上支付</);
@@ -385,7 +385,7 @@ test('offline payment receipt renders parsed quantity units and multiple item ro
 
 test('offline payment receipt accepts the floating style image selected by the user', () => {
     const options = {
-        headerImageUrl: 'http://127.0.0.1:8000/extensions/yuzuki-phone/phone/sjxf8_xp.png',
+        headerImageUrl: 'http://127.0.0.1:8000/extensions/yuzuki-phone/assets/icons/ios/receipt-header-8.svg',
         styleId: 'style-8'
     };
     const receipt = renderOfflineWechatPaymentReceipt({
@@ -399,9 +399,9 @@ test('offline payment receipt accepts the floating style image selected by the u
 支付金额：¥16.00
 </线上支付>`, options);
 
-    assert.match(receipt, /sjxf8_xp\.png/);
+    assert.match(receipt, /receipt-header-8\.svg/);
     assert.match(receipt, /data-phone-floating-style="style-8"/);
-    assert.match(replaced, /sjxf8_xp\.png/);
+    assert.match(replaced, /receipt-header-8\.svg/);
     assert.match(replaced, /data-phone-floating-style="style-8"/);
 });
 
