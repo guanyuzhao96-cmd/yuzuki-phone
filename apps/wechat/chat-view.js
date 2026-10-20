@@ -1,6 +1,6 @@
 import { CALL_HANGUP_RULE, parseCallHangupReply } from '../../config/call-hangup.js';
 import { WorldbookManager } from '../../config/worldbook-manager.js';
-import { buildCharacters, findMvuRole, formatMvuValue, latestMvuSnapshot } from '../dossier/dossier-data.js';
+import { buildCharacters, findCharacterRelationship, findMvuRole, formatMvuValue, latestMvuSnapshot, parseCharacterRelationships } from '../dossier/dossier-data.js';
 /* ========================================================
  *  柚月小手机 (Yuzuki's Little Phone)
  *  作者 (Author): yuzuki
@@ -1029,7 +1029,7 @@ export class ChatView {
         ]);
         if (this._wechatRoleArchiveCache?.scope === scope
             && Date.now() - this._wechatRoleArchiveCache.loadedAt < 60_000) {
-            return this._wechatRoleArchiveCache.characters;
+            return this._wechatRoleArchiveCache.data;
         }
         if (this._wechatRoleArchiveLoad?.scope === scope) return this._wechatRoleArchiveLoad.promise;
 
@@ -1039,13 +1039,17 @@ export class ChatView {
                 const bookNames = await manager.getDossierDefaultBooks();
                 const results = await Promise.allSettled(bookNames.map(name => manager.readDossierWorldbook(name)));
                 const books = results.filter(result => result.status === 'fulfilled').map(result => result.value);
-                const characters = buildCharacters(books);
-                this._wechatRoleArchiveCache = { scope, loadedAt: Date.now(), characters };
-                return characters;
+                const data = {
+                    characters: buildCharacters(books),
+                    relationships: parseCharacterRelationships(books)
+                };
+                this._wechatRoleArchiveCache = { scope, loadedAt: Date.now(), data };
+                return data;
             } catch (error) {
                 console.warn('[Wechat] 读取联系人角色档案失败，将使用联系人已有资料:', error);
-                this._wechatRoleArchiveCache = { scope, loadedAt: Date.now(), characters: [] };
-                return [];
+                const data = { characters: [], relationships: [] };
+                this._wechatRoleArchiveCache = { scope, loadedAt: Date.now(), data };
+                return data;
             } finally {
                 if (this._wechatRoleArchiveLoad?.scope === scope) this._wechatRoleArchiveLoad = null;
             }
@@ -1059,7 +1063,9 @@ export class ChatView {
         const contactNames = [contact.characterName, contact.formalName, contact.fullName, contact.name, contact.remark]
             .map(value => String(value || '').trim()).filter(Boolean);
         const contactName = contactNames[0] || '';
-        const roleArchives = contactNames.length > 0 ? await this._getWechatRoleArchive(ctx) : [];
+        const roleData = contactNames.length > 0 ? await this._getWechatRoleArchive(ctx) : { characters: [], relationships: [] };
+        const roleArchives = Array.isArray(roleData) ? roleData : roleData.characters || [];
+        const relationshipIndex = Array.isArray(roleData) ? [] : roleData.relationships || [];
         const roleArchive = roleArchives.find(role => contactNames.includes(role.name)) || null;
         const characterList = Array.isArray(ctx.characters) ? ctx.characters : Object.values(ctx.characters || {});
         const matchingCharacter = characterList.find(character => contactNames.includes(
@@ -1100,9 +1106,13 @@ export class ChatView {
         const mvuAffection = mvuRole?.affection;
         const archiveRelation = collectFields(dynamicFields, /^(关系|relationship|与用户关系|对用户关系)$/i).join('；');
         const archiveAffection = collectFields(dynamicFields, /^(好感度|affection|对用户好感度)$/i).join('；');
-        const relationship = mvuRelation !== undefined && mvuRelation !== null && mvuRelation !== ''
-            ? formatMvuValue(mvuRelation)
-            : (archiveRelation || String(contact.relationship || contact.relation || '').trim() || '未记录');
+        const userNames = [ctx.name1, ctx.userName, ctx.user?.name, ctx.persona?.name, ctx.personaName]
+            .map(value => String(value || '').trim()).filter(Boolean);
+        const worldbookRelationship = findCharacterRelationship(relationshipIndex, contactNames, userNames);
+        const relationship = worldbookRelationship?.description
+            || (mvuRelation !== undefined && mvuRelation !== null && mvuRelation !== ''
+                ? formatMvuValue(mvuRelation)
+                : (archiveRelation || String(contact.relationship || contact.relation || '').trim() || '未记录'));
         const affection = mvuAffection !== undefined && mvuAffection !== null && mvuAffection !== ''
             ? formatMvuValue(mvuAffection)
             : (archiveAffection || (contact.affection !== undefined && contact.affection !== null ? String(contact.affection) : '未记录'));
@@ -1112,6 +1122,7 @@ export class ChatView {
             personality: personality || '未记录',
             relationship,
             affection,
+            relationshipSource: worldbookRelationship ? '世界书「角色关系汇总」' : (mvuRelation !== undefined && mvuRelation !== null && mvuRelation !== '' ? 'MVU最新角色状态' : (archiveRelation ? '动态角色档案' : '联系人资料')),
             source: mvuRole ? 'MVU最新角色状态' : (roleArchive ? '关联角色档案' : (matchingCharacter ? '酒馆角色卡' : '联系人资料'))
         };
     }
@@ -1782,6 +1793,7 @@ export class ChatView {
                 `性格：${String(syncedProfile.personality || '未记录').slice(0, 360)}`,
                 `对用户好感度：${syncedProfile.affection}`,
                 `与用户关系：${syncedProfile.relationship}`,
+                `关系来源：${syncedProfile.relationshipSource}`,
                 supplementalSetting ? `补充微信设定：${supplementalSetting}` : ''
             ].filter(Boolean).join('\n'));
         }
@@ -12197,6 +12209,7 @@ renderChatRoom(chat) {
                     `角色性格：${syncedProfile.personality}`,
                     `对用户好感度：${syncedProfile.affection}`,
                     `与用户关系：${syncedProfile.relationship}`,
+                    `关系来源：${syncedProfile.relationshipSource}`,
                     `同步来源：${syncedProfile.source}`,
                     '回复时按该角色的性格和当前关系自然表现；好感度与关系以当前同步数据为准，标记为“未记录”时不要自行编造具体数值或既定关系。'
                 ];

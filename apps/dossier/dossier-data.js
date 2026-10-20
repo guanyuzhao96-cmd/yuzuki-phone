@@ -44,6 +44,60 @@ export function buildCharacters(books) {
     return result;
 }
 
+export function parseCharacterRelationships(books) {
+    const relationships = [];
+    for (const book of books || []) {
+        const entries = Array.isArray(book.entries) ? book.entries : Object.values(book.entries || {});
+        for (const entry of entries) {
+            const keys = Array.isArray(entry.key) ? entry.key.join(' ') : String(entry.key || '');
+            const label = `${entry.comment || ''} ${keys}`;
+            if (!/角色关系汇总|角色关系/.test(label) && !/【角色关系汇总】/.test(entry.content || '')) continue;
+            for (const line of String(entry.content || '').split(/\r?\n/)) {
+                const match = line.match(/^\s*(.+?)\s*(↔|→|←)\s*(.+?)\s*[:：]\s*(.+?)\s*$/);
+                if (!match) continue;
+                const [, left, direction, right, description] = match;
+                relationships.push({
+                    left: clean(left),
+                    right: clean(right),
+                    direction,
+                    description: clean(description),
+                    book: book.name || ''
+                });
+            }
+        }
+    }
+    return relationships;
+}
+
+export function findCharacterRelationship(relationships, contactNames = [], userNames = []) {
+    const contacts = new Set((contactNames || []).map(clean).filter(Boolean));
+    const users = new Set((userNames || []).map(clean).filter(Boolean));
+    if (!contacts.size || !Array.isArray(relationships)) return null;
+
+    const findFor = names => {
+        for (let i = relationships.length - 1; i >= 0; i--) {
+            const relation = relationships[i];
+            if (contacts.has(relation.left) && names.has(relation.right)) return relation;
+            if (contacts.has(relation.right) && names.has(relation.left)) return relation;
+        }
+        return null;
+    };
+    const explicitMatch = findFor(users);
+    if (explicitMatch) return explicitMatch;
+
+    // When the active Tavern persona has a different display name, the main
+    // character is usually the most frequently referenced person in this
+    // story's relationship summary. Only use that fallback when unambiguous.
+    const counts = new Map();
+    for (const relation of relationships) {
+        counts.set(relation.left, (counts.get(relation.left) || 0) + 1);
+        counts.set(relation.right, (counts.get(relation.right) || 0) + 1);
+    }
+    const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+    if (!ranked.length || ranked[0][1] < 2 || (ranked[1] && ranked[1][1] === ranked[0][1])) return null;
+    return findFor(new Set([ranked[0][0]]));
+}
+
 // JSON pointers keep names containing dots or slashes unambiguous.
 export function flattenMvu(root, limit = 2000) {
     const result = [];

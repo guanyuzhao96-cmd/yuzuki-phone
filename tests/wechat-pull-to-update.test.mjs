@@ -113,22 +113,27 @@ test('main-chat reply forwarding appends the WeChat turn through the shared phon
 
 test('WeChat contact context uses the matching role personality and latest MVU relationship values', async () => {
     const view = Object.create(ChatView.prototype);
-    view._getWechatRoleArchive = async () => [{
-        name: '林思雨',
-        sources: [
-            { type: 'static', enabled: true, fields: [{ label: '性格', value: '外冷内热，熟悉后很健谈。' }] },
-            { type: 'dynamic', enabled: true, fields: [{ label: '关系', value: '普通朋友' }] }
-        ]
-    }];
+    view._getWechatRoleArchive = async () => ({
+        characters: [{
+            name: '林思雨',
+            sources: [
+                { type: 'static', enabled: true, fields: [{ label: '性格', value: '外冷内热，熟悉后很健谈。' }] },
+                { type: 'dynamic', enabled: true, fields: [{ label: '关系', value: '普通朋友' }] }
+            ]
+        }],
+        relationships: [{ left: '林思雨', right: '赵冠宇', direction: '↔', description: '同班同学、秘密情人', book: '当前故事线' }]
+    });
     view.app = { storage: null };
     const profile = await view._getWechatContactSyncProfile({ name: '林思雨', relation: '旧关系' }, {
+        name1: '赵冠宇',
         chat: [],
         Mvu: { getMvuData: () => ({ roles: { lin: { role_name: '林思雨', relationship: '暧昧对象', affection: 0 } } }) }
     });
 
     assert.equal(profile.personality, '性格：外冷内热，熟悉后很健谈。');
     assert.equal(profile.affection, '0');
-    assert.equal(profile.relationship, '暧昧对象');
+    assert.equal(profile.relationship, '同班同学、秘密情人');
+    assert.equal(profile.relationshipSource, '世界书「角色关系汇总」');
     assert.equal(profile.source, 'MVU最新角色状态');
 });
 

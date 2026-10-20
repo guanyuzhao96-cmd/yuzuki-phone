@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildCharacters, parseFields, visibleFields, flattenMvu, latestMvu, escapeHtml, findMvuRole, formatMvuValue, latestMvuSnapshot, MVU_ROLE_FIELDS } from '../apps/dossier/dossier-data.js';
+import { buildCharacters, parseFields, visibleFields, flattenMvu, latestMvu, escapeHtml, findMvuRole, formatMvuValue, latestMvuSnapshot, MVU_ROLE_FIELDS, parseCharacterRelationships, findCharacterRelationship } from '../apps/dossier/dossier-data.js';
 import { WorldbookManager } from '../config/worldbook-manager.js';
 
 test('automatic directory discovery includes attached global, main, extra and chat books only', async () => {
@@ -33,6 +33,27 @@ test('same names across storylines never merge', () => {
     const result = buildCharacters([book(), book('故事线乙')]);
     assert.equal(result.length, 4);
     assert.notEqual(result[0].id, result[2].id);
+});
+
+test('character relationship summary resolves the contact relationship to the user persona', () => {
+    const relationships = parseCharacterRelationships([{ name: '当前故事线', entries: [{
+        comment: 'CWB角色关系汇总-聊天记录',
+        key: ['角色关系汇总'],
+        content: '【角色关系汇总】\n林思雨 ↔ 赵冠宇：同班同学、秘密情人\n赵冠宇 → 叶知秋：同学、匿名胁迫者'
+    }] }]);
+
+    assert.deepEqual(findCharacterRelationship(relationships, ['林思雨'], ['赵冠宇']), {
+        left: '林思雨', right: '赵冠宇', direction: '↔', description: '同班同学、秘密情人', book: '当前故事线'
+    });
+    assert.equal(findCharacterRelationship(relationships, ['叶知秋'], ['赵冠宇']).description, '同学、匿名胁迫者');
+});
+
+test('relationship summary can identify the story protagonist when persona display name differs', () => {
+    const relationships = parseCharacterRelationships([{ entries: [{
+        comment: '角色关系汇总',
+        content: '甲 ↔ 主角：关系甲\n乙 → 主角：关系乙\n丙 ↔ 主角：关系丙'
+    }] }]);
+    assert.equal(findCharacterRelationship(relationships, ['乙'], ['聊天用户']).description, '关系乙');
 });
 
 test('ambiguous dynamic entries are retained for explicit source selection', () => {
