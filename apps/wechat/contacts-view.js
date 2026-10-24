@@ -352,7 +352,7 @@ export class ContactsView {
                     return;
                 }
                 const contactId = item.dataset.contactId;
-                this.openContactChat(contactId);
+                this.openContactProfile(contactId);
             });
 
             item.addEventListener('touchstart', (e) => {
@@ -1396,6 +1396,80 @@ export class ContactsView {
 
             this.app.currentChat = chat;
             this.app.render();
+        }
+    }
+
+    async openContactProfile(contactId) {
+        const contact = this.app.wechatData.getContact(contactId);
+        if (!contact) return;
+
+        const renderPage = (profile = null, loading = false) => {
+            const name = this._escapeHtml(contact.name || '联系人');
+            const remark = String(contact.remark || '').trim();
+            const avatar = this.app.renderAvatar(contact.avatar, '👤', contact.name || '联系人');
+            const info = profile || {
+                personality: String(contact.personality || contact.characterPersonality || contact.description || '').trim() || '未记录',
+                affection: contact.affection !== undefined && contact.affection !== null ? String(contact.affection) : '未记录',
+                relationship: String(contact.relationship || contact.relation || '').trim() || '未记录',
+                source: '联系人资料',
+                relationshipSource: '联系人资料'
+            };
+            const row = (label, value) => `
+                <div style="display:flex; align-items:flex-start; gap:12px; padding:11px 14px; border-bottom:1px solid rgba(60,60,67,.1);">
+                    <div style="flex:0 0 76px; color:#8e8e93; font-size:13px;">${label}</div>
+                    <div style="flex:1; min-width:0; color:#1c1c1e; font-size:14px; line-height:1.5; overflow-wrap:anywhere;">${this._escapeHtml(value || '未记录')}</div>
+                </div>`;
+
+            this.app.phoneShell.setContent(`
+                <div class="wechat-app wechat-contact-profile">
+                    <div class="wechat-header">
+                        <div class="wechat-header-left">
+                            <button class="wechat-back-btn" id="contact-profile-back" aria-label="返回通讯录">
+                                <i class="fa-solid fa-chevron-left"></i>
+                            </button>
+                        </div>
+                        <div class="wechat-header-title">联系人资料</div>
+                        <div class="wechat-header-right"></div>
+                    </div>
+                    <div class="wechat-content" style="background:#f2f2f7; padding:16px 12px 24px; overflow-y:auto; -webkit-overflow-scrolling:touch;">
+                        <div style="display:flex; align-items:center; gap:14px; padding:16px; margin-bottom:12px; background:#fff; border-radius:14px;">
+                            <div style="width:58px; height:58px; flex:0 0 58px; overflow:hidden; border-radius:12px;">${avatar}</div>
+                            <div style="min-width:0;">
+                                <div style="font-size:19px; line-height:1.3; font-weight:650; color:#1c1c1e; overflow-wrap:anywhere;">${name}</div>
+                                ${remark ? `<div style="margin-top:4px; font-size:12px; color:#8e8e93;">备注：${this._escapeHtml(remark)}</div>` : ''}
+                            </div>
+                        </div>
+                        <div style="overflow:hidden; background:#fff; border-radius:14px;">
+                            ${row('角色性格', loading ? '读取中…' : info.personality)}
+                            ${row('对你的好感度', loading ? '读取中…' : info.affection)}
+                            ${row('与你的关系', loading ? '读取中…' : info.relationship)}
+                            <div style="padding:8px 14px; color:#8e8e93; font-size:11px; line-height:1.4;">
+                                资料来源：${this._escapeHtml(info.source || '联系人资料')} · 关系来源：${this._escapeHtml(info.relationshipSource || '联系人资料')}
+                            </div>
+                        </div>
+                        <button id="contact-profile-message" type="button" style="display:block; width:100%; min-height:46px; margin-top:16px; border:0; border-radius:12px; background:#07c160; color:#fff; font-size:16px; font-weight:600;">
+                            发消息
+                        </button>
+                    </div>
+                </div>
+            `);
+
+            const currentView = document.querySelector('.phone-view-current') || document;
+            currentView.querySelector('#contact-profile-back')?.addEventListener('click', () => {
+                this.app.currentView = 'contacts';
+                this.app.currentChat = null;
+                this.app.render();
+            });
+            currentView.querySelector('#contact-profile-message')?.addEventListener('click', () => this.openContactChat(contactId));
+        };
+
+        renderPage(null, true);
+        try {
+            const profile = await this.app.chatView?._getWechatContactSyncProfile?.(contact);
+            renderPage(profile || null);
+        } catch (error) {
+            console.warn('[Wechat] 读取联系人资料失败:', error);
+            renderPage(null);
         }
     }
 
