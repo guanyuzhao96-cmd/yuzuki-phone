@@ -1,6 +1,6 @@
 import { CALL_HANGUP_RULE, parseCallHangupReply } from '../../config/call-hangup.js';
 import { WorldbookManager } from '../../config/worldbook-manager.js';
-import { buildCharacters, findCharacterRelationship, findMvuRole, formatMvuValue, latestMvuSnapshot, parseCharacterRelationships } from '../dossier/dossier-data.js';
+import { buildCharacters, findMvuRole, formatMvuValue, latestMvuSnapshot } from '../dossier/dossier-data.js';
 /* ========================================================
  *  柚月小手机 (Yuzuki's Little Phone)
  *  作者 (Author): yuzuki
@@ -1041,13 +1041,12 @@ export class ChatView {
                 const books = results.filter(result => result.status === 'fulfilled').map(result => result.value);
                 const data = {
                     characters: buildCharacters(books),
-                    relationships: parseCharacterRelationships(books)
                 };
                 this._wechatRoleArchiveCache = { scope, loadedAt: Date.now(), data };
                 return data;
             } catch (error) {
                 console.warn('[Wechat] 读取联系人角色档案失败，将使用联系人已有资料:', error);
-                const data = { characters: [], relationships: [] };
+                const data = { characters: [] };
                 this._wechatRoleArchiveCache = { scope, loadedAt: Date.now(), data };
                 return data;
             } finally {
@@ -1063,37 +1062,13 @@ export class ChatView {
         const contactNames = [contact.characterName, contact.formalName, contact.fullName, contact.name, contact.remark]
             .map(value => String(value || '').trim()).filter(Boolean);
         const contactName = contactNames[0] || '';
-        const roleData = contactNames.length > 0 ? await this._getWechatRoleArchive(ctx) : { characters: [], relationships: [] };
+        const roleData = contactNames.length > 0 ? await this._getWechatRoleArchive(ctx) : { characters: [] };
         const roleArchives = Array.isArray(roleData) ? roleData : roleData.characters || [];
-        const relationshipIndex = Array.isArray(roleData) ? [] : roleData.relationships || [];
         const roleArchive = roleArchives.find(role => contactNames.includes(role.name)) || null;
         const characterList = Array.isArray(ctx.characters) ? ctx.characters : Object.values(ctx.characters || {});
         const matchingCharacter = characterList.find(character => contactNames.includes(
             String(character?.name || character?.data?.name || '').trim()
         )) || null;
-        const staticFields = (roleArchive?.sources || [])
-            .filter(source => source.type === 'static' && source.enabled !== false)
-            .flatMap(source => Array.isArray(source.fields) ? source.fields : []);
-        const dynamicFields = (roleArchive?.sources || [])
-            .filter(source => source.type === 'dynamic' && source.enabled !== false)
-            .flatMap(source => Array.isArray(source.fields) ? source.fields : []);
-        const limitText = (value, limit) => {
-            const text = String(value ?? '').trim();
-            return text.length > limit ? `${text.slice(0, limit)}…` : text;
-        };
-        const collectFields = (fields, pattern) => fields
-            .filter(field => pattern.test(String(field.label || '')) && String(field.value ?? '').trim())
-            .map(field => `${String(field.label).trim()}：${limitText(field.value, 320)}`)
-            .slice(0, 4);
-
-        let personality = String(contact.personality || contact.characterPersonality || '').trim();
-        if (!personality) personality = collectFields(staticFields, /性格|个性|行为特征|性情/).join('；');
-        if (!personality && matchingCharacter) {
-            personality = String(matchingCharacter.personality || matchingCharacter.data?.personality || '').trim();
-        }
-        if (!personality) personality = String(contact.description || '').trim();
-        personality = limitText(personality, 900);
-
         const mvuApi = ctx.Mvu || window.Mvu || window.parent?.Mvu;
         const mvuSnapshot = latestMvuSnapshot(
             typeof mvuApi?.getMvuData === 'function' ? args => mvuApi.getMvuData(args) : null,
@@ -1102,8 +1077,6 @@ export class ChatView {
         const formalName = roleArchive?.name || matchingCharacter?.name || matchingCharacter?.data?.name || contactName;
         const mvuMatch = formalName ? findMvuRole(mvuSnapshot?.data, formalName) : { status: 'missing', role: null };
         const mvuRole = mvuMatch.status === 'matched' ? mvuMatch.role : null;
-        const mvuRelation = mvuRole?.relationship;
-        const mvuAffection = mvuRole?.affection;
         const normalizeFieldKey = value => String(value || '').toLowerCase().replace(/[\s_-]/g, '');
         const getMvuField = (aliases = []) => {
             if (!mvuRole) return undefined;
@@ -1124,74 +1097,33 @@ export class ChatView {
             return visit(mvuRole);
         };
         const formatProfileValue = value => {
-            let current = value;
-            if (current && typeof current === 'object' && !Array.isArray(current)) {
+            if (typeof value === 'boolean') return value ? '是' : '否';
+            if (value && typeof value === 'object') {
+                if (Object.keys(value).length === 0) return '未记录';
                 for (const key of ['value', 'current', 'currentValue', 'current_value', 'amount', 'score']) {
-                    if (current[key] !== undefined && current[key] !== null && current[key] !== '') {
-                        current = current[key];
-                        break;
-                    }
+                    if (value[key] !== undefined && value[key] !== null && value[key] !== '') return formatMvuValue(value[key]);
                 }
+                return JSON.stringify(value, null, 2);
             }
-            return formatMvuValue(current);
+            return formatMvuValue(value);
         };
-        const getDynamicField = (pattern) => dynamicFields.find(field => pattern.test(String(field.label || '')) && String(field.value ?? '').trim())?.value;
-        const getProfileField = (aliases, archivePattern, fallback = '未记录') => {
-            const mvuValue = getMvuField(aliases);
-            if (mvuValue !== undefined && mvuValue !== null && mvuValue !== '') {
-                return { value: formatProfileValue(mvuValue), source: 'MVU最新角色状态' };
-            }
-            const archiveValue = getDynamicField(archivePattern);
-            if (archiveValue !== undefined) return { value: String(archiveValue).trim(), source: '动态角色档案' };
-            const contactValue = aliases.map(alias => contact?.[alias]).find(value => value !== undefined && value !== null && value !== '');
-            if (contactValue !== undefined) return { value: formatProfileValue(contactValue), source: '联系人资料' };
-            return { value: fallback, source: '未记录' };
-        };
-        const archiveRelation = getDynamicField(/^(关系|relationship|与主角关系|对主角关系|与用户关系|对用户关系)$/i);
-        const archiveAffection = getDynamicField(/^(好感|好感度|affection|对主角好感度|对用户好感度)$/i);
-        const userNames = [ctx.name1, ctx.userName, ctx.user?.name, ctx.persona?.name, ctx.personaName]
-            .map(value => String(value || '').trim()).filter(Boolean);
-        const worldbookRelationship = findCharacterRelationship(relationshipIndex, contactNames, userNames);
-        const relationship = worldbookRelationship?.description
-            || (mvuRelation !== undefined && mvuRelation !== null && mvuRelation !== ''
-                ? formatMvuValue(mvuRelation)
-                : (archiveRelation || String(contact.relationship || contact.relation || '').trim() || '未记录'));
-        const affection = mvuAffection !== undefined && mvuAffection !== null && mvuAffection !== ''
-            ? formatMvuValue(mvuAffection)
-            : (archiveAffection || (contact.affection !== undefined && contact.affection !== null ? String(contact.affection) : '未记录'));
-
-        const roleFields = [
-            { label: '角色等级', data: getProfileField(['grade', '等级', '角色等级'], /^(等级|角色等级|grade)$/i) },
-            { label: '对你的好感度', data: { value: affection, source: mvuAffection !== undefined && mvuAffection !== null && mvuAffection !== '' ? 'MVU最新角色状态' : (archiveAffection ? '动态角色档案' : '联系人资料') } },
-            { label: '性欲值', data: getProfileField(['libido', 'libidoValue', 'sexualDesire', 'sexualDesireValue', 'sexDrive', 'desireValue', '性欲', '性欲值', '性欲度'], /^(性欲|性欲值|性欲度|libido|libidoValue|sexualDesire|sexualDesireValue|sexDrive|desireValue)$/i) },
-            { label: '堕落值', data: getProfileField(['corruption', 'corruptionValue', 'corruptionLevel', 'depravity', 'depravityValue', '堕落', '堕落值', '堕落度'], /^(堕落|堕落值|堕落度|corruption|corruptionValue|corruptionLevel|depravity|depravityValue)$/i) },
-            { label: '性经历人数', data: getProfileField(['sexualHistoryCount', 'sexualPartnerCount', 'sexExperienceCount', 'sexPartnersCount', '性经历人数', '性经历次数'], /^(性经历人数|性经历次数|sexualHistoryCount|sexualPartnerCount|sexExperienceCount|sexPartnersCount)$/i) },
-            { label: '性经历人员', data: getProfileField(['sexualHistoryPeople', 'sexualPartners', 'sexPartners', 'sexualExperiencePeople', '性经历人员', '性经历对象'], /^(性经历人员|性经历对象|sexualHistoryPeople|sexualPartners|sexPartners|sexualExperiencePeople)$/i) },
-            { label: '是否与主角发生关系', data: getProfileField(['hasSexWithProtagonist', 'hadSexWithProtagonist', 'intimateWithProtagonist', 'hasIntimateRelationshipWithProtagonist', '是否与主角发生关系', '是否与主角有过关系'], /^(是否与主角发生关系|是否与主角有过关系|hasSexWithProtagonist|hadSexWithProtagonist|intimateWithProtagonist|hasIntimateRelationshipWithProtagonist)$/i) },
-            { label: '与你的关系', data: { value: relationship, source: worldbookRelationship ? '世界书「角色关系汇总」' : (mvuRelation !== undefined && mvuRelation !== null && mvuRelation !== '' ? 'MVU最新角色状态' : (archiveRelation ? '动态角色档案' : '联系人资料')) } },
-            { label: '恋爱状态', data: getProfileField(['romanceStatus', 'romance_status', '恋爱状态'], /^(恋爱状态|romanceStatus)$/i) },
-            { label: '攻略阶段', data: getProfileField(['approachStage', 'approach_stage', '攻略阶段', '阶段'], /^(攻略阶段|阶段|approachStage)$/i) },
-            { label: '阶段依据', data: getProfileField(['approachEvidence', 'approach_evidence', '阶段依据'], /^(阶段依据|approachEvidence)$/i) },
-            { label: '当前目标', data: getProfileField(['currentGoal', 'current_goal', 'goal', 'target', '当前目标', '目标'], /^(当前目标|目标|currentGoal)$/i) },
-            { label: '目标进度', data: getProfileField(['goalProgress', 'goal_progress', '目标进度'], /^(目标进度|goalProgress)$/i) },
-            { label: '当前任务', data: getProfileField(['currentTask', 'current_task', 'activeTask', '当前任务'], /^(当前任务|currentTask|activeTask)$/i) },
-            { label: '当前状态/欲望', data: getProfileField(['currentMoodOrDesire', 'current_mood_or_desire', 'currentMood', 'currentDesire', '心情', '当前心情', '当前状态', '当前欲望'], /^(心情|当前状态|当前欲望|currentMoodOrDesire)$/i) },
-            { label: '短期目标', data: getProfileField(['shortTermGoal', 'short_term_goal', '短期目标'], /^(短期目标|shortTermGoal)$/i) },
-            { label: '长期目标', data: getProfileField(['longTermGoal', 'long_term_goal', '长期目标'], /^(长期目标|longTermGoal)$/i) }
+        const fields = [
+            ['好感度', ['好感度', 'affection']],
+            ['欲望值', ['欲望值', 'desire', 'desireValue', 'libido', 'libidoValue']],
+            ['堕落值', ['堕落值', 'corruption', 'corruptionValue', 'depravity']],
+            ['与主角的关系', ['与主角的关系', '与主角关系', 'relationship']],
+            ['与主角发生过关系', ['与主角发生过关系', '与主角发生关系', 'hasSexWithProtagonist']],
+            ['性经历人数', ['性经历人数', 'sexualHistoryCount']],
+            ['性经历人员', ['性经历人员', 'sexualHistoryPeople']],
+            ['当前目标', ['当前目标', 'currentGoal']],
+            ['关联任务', ['关联任务', 'linkedTask', 'boundTask']]
         ];
-        const details = [
-            { label: '角色性格', value: personality || '未记录', source: roleArchive ? '关联角色档案' : (matchingCharacter ? '酒馆角色卡' : '联系人资料') },
-            ...roleFields.map(({ label, data }) => ({ label, value: data.value || '未记录', source: data.source }))
-        ];
-
         return {
             roleName: formalName,
-            personality: personality || '未记录',
-            relationship,
-            affection,
-            details,
-            relationshipSource: worldbookRelationship ? '世界书「角色关系汇总」' : (mvuRelation !== undefined && mvuRelation !== null && mvuRelation !== '' ? 'MVU最新角色状态' : (archiveRelation ? '动态角色档案' : '联系人资料')),
-            source: mvuRole ? 'MVU最新角色状态' : (roleArchive ? '关联角色档案' : (matchingCharacter ? '酒馆角色卡' : '联系人资料'))
+            details: fields.map(([label, aliases]) => {
+                const value = getMvuField(aliases);
+                return { label, value: value === undefined ? '未记录' : formatProfileValue(value) };
+            })
         };
     }
 
@@ -1858,10 +1790,8 @@ export class ChatView {
             seenContacts.add(contactKey);
             memberProfiles.push([
                 `【${contact.name || memberName}】`,
-                ...(syncedProfile.details || []).map(field => `${field.label}：${String(field.value || '未记录').slice(0, field.label === '角色性格' ? 360 : 500)}`),
-                `关系来源：${syncedProfile.relationshipSource}`,
-                `资料来源：${syncedProfile.source}`,
-                '回复时参考以上角色状态与关系；未记录的字段不得自行编造数值或既定事实。',
+                ...(syncedProfile.details || []).map(field => `${field.label}：${String(field.value || '未记录').slice(0, 500)}`),
+                '以上是该成员最新的 MVU 状态。回复时按好感、欲望、堕落、与主角的关系、关系经历、当前目标及关联任务参考；不得编造未记录值，也不要在普通聊天中逐项复述。',
                 supplementalSetting ? `补充微信设定：${supplementalSetting}` : ''
             ].filter(Boolean).join('\n'));
         }
@@ -12275,9 +12205,7 @@ renderChatRoom(chat) {
                     `【当前聊天对象档案】`,
                     `联系人：${currentContact.name || targetChat?.name || charName}`,
                     ...(syncedProfile.details || []).map(field => `${field.label}：${field.value || '未记录'}`),
-                    `关系来源：${syncedProfile.relationshipSource}`,
-                    `同步来源：${syncedProfile.source}`,
-                    '回复时按上述性格、好感、欲望/堕落数据、目标和关系自然表现；这些只作为角色状态参考，不要在普通聊天里逐项复述。数值与关系以当前同步数据为准，标记为“未记录”的字段不得自行编造。'
+                    '以上是该联系人的最新 MVU 状态。回复时参考好感度、欲望值、堕落值、与主角的关系、关系经历、当前目标和关联任务；不得编造未记录值，也不要在普通聊天中逐项复述。'
                 ];
 
                 const supplementalSetting = this._getWechatSupplementalSetting(currentContact);
