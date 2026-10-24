@@ -1408,28 +1408,23 @@ export class ContactsView {
             const remark = String(contact.remark || '').trim();
             const avatar = this.app.renderAvatar(contact.avatar, '👤', contact.name || '联系人');
             const info = profile || {
-                personality: String(contact.personality || contact.characterPersonality || contact.description || '').trim() || '未记录',
-                affection: contact.affection !== undefined && contact.affection !== null ? String(contact.affection) : '未记录',
-                relationship: String(contact.relationship || contact.relation || '').trim() || '未记录',
-                source: '联系人资料',
-                relationshipSource: '联系人资料',
                 details: [
-                    { label: '角色性格', value: String(contact.personality || contact.characterPersonality || contact.description || '').trim() || '未记录' },
-                    { label: '对你的好感度', value: contact.affection !== undefined && contact.affection !== null ? String(contact.affection) : '未记录' },
-                    { label: '性欲值', value: String(contact.libido ?? contact.sexualDesire ?? contact['性欲值'] ?? '未记录') },
-                    { label: '堕落值', value: String(contact.corruption ?? contact['堕落值'] ?? '未记录') },
-                    { label: '与你的关系', value: String(contact.relationship || contact.relation || '未记录') },
-                    { label: '当前目标', value: String(contact.currentGoal || contact.goal || '未记录') },
-                    { label: '目标进度', value: String(contact.goalProgress || '未记录') },
-                    { label: '短期目标', value: String(contact.shortTermGoal || '未记录') },
-                    { label: '长期目标', value: String(contact.longTermGoal || '未记录') }
+                    { label: '好感度', value: '未记录' },
+                    { label: '欲望值', value: '未记录' },
+                    { label: '堕落值', value: '未记录' },
+                    { label: '与主角的关系', value: '未记录' },
+                    { label: '与主角发生过关系', value: '未记录' },
+                    { label: '性经历人数', value: '未记录' },
+                    { label: '性经历人员', value: '未记录' },
+                    { label: '当前目标', value: '未记录' },
+                    { label: '关联任务', value: '未记录' }
                 ]
             };
             const details = Array.isArray(info.details) ? info.details : [];
             const row = (label, value) => `
                 <div style="display:flex; align-items:flex-start; gap:12px; padding:11px 14px; border-bottom:1px solid rgba(60,60,67,.1);">
                     <div style="flex:0 0 76px; color:#8e8e93; font-size:13px;">${label}</div>
-                    <div style="flex:1; min-width:0; color:#1c1c1e; font-size:14px; line-height:1.5; overflow-wrap:anywhere;">${this._escapeHtml(value || '未记录')}</div>
+                    <div style="flex:1; min-width:0; color:#1c1c1e; font-size:14px; line-height:1.5; white-space:pre-wrap; overflow-wrap:anywhere;">${this._escapeHtml(value || '未记录')}</div>
                 </div>`;
 
             this.app.phoneShell.setContent(`
@@ -1453,9 +1448,6 @@ export class ContactsView {
                         </div>
                         <div style="overflow:hidden; background:#fff; border-radius:14px;">
                             ${details.map(field => row(field.label, loading ? '读取中…' : field.value)).join('')}
-                            <div style="padding:8px 14px; color:#8e8e93; font-size:11px; line-height:1.4;">
-                                资料来源：${this._escapeHtml(info.source || '联系人资料')} · 关系来源：${this._escapeHtml(info.relationshipSource || '联系人资料')}
-                            </div>
                         </div>
                         <button id="contact-profile-message" type="button" style="display:block; width:100%; min-height:46px; margin-top:16px; border:0; border-radius:12px; background:#07c160; color:#fff; font-size:16px; font-weight:600;">
                             发消息
