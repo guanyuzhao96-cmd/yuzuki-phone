@@ -1420,24 +1420,30 @@ export class ContactsView {
                 }))
             };
             const profileSections = Array.isArray(info.sections) ? info.sections : [{ title: '角色档案', details: info.details || [] }];
+            const isMissingProfileValue = value => !String(value ?? '').trim() || String(value).trim() === '未记录';
+            const visibleProfileFields = fields => (Array.isArray(fields) ? fields : []).filter(field => loading || !isMissingProfileValue(field?.value));
             const relationSection = profileSections.find(section => section.title === '关系数值');
-            const relationFields = Array.isArray(relationSection?.details) ? relationSection.details : fallbackDetails[0].map(label => ({ label, value: '未记录' }));
+            const relationFields = visibleProfileFields(Array.isArray(relationSection?.details) ? relationSection.details : fallbackDetails[0].map(label => ({ label, value: '未记录' })));
             const relationStats = relationFields.map(field => `
                 <div class="wechat-profile-stat">
                     <span>${this._escapeHtml(field.label)}</span>
                     <b>${this._escapeHtml(loading ? '读取中…' : field.value || '未记录')}</b>
                 </div>`).join('');
-            const contentSections = profileSections.filter(section => section !== relationSection);
+            const contentSections = profileSections.filter(section => section !== relationSection)
+                .map(section => ({ ...section, visibleDetails: visibleProfileFields(section.details) }))
+                .filter(section => section.visibleDetails.length > 0);
             const sectionHtml = contentSections.map((section, index) => `
                 <details class="wechat-profile-group" ${index === 0 ? 'open' : ''}>
-                    <summary>${this._escapeHtml(section.title || '角色档案')}<span>${Array.isArray(section.details) ? section.details.length : 0} 项</span></summary>
+                    <summary>${this._escapeHtml(section.title || '角色档案')}<span>${section.visibleDetails.length} 项</span></summary>
                     <div class="wechat-profile-fields">
-                        ${(Array.isArray(section.details) ? section.details : []).map(field => `
+                        ${section.visibleDetails.map(field => `
                             <div class="wechat-profile-field"><b>${this._escapeHtml(field.label || '')}</b><p>${this._escapeHtml(loading ? '读取中…' : field.value || '未记录')}</p></div>
-                        `).join('') || '<p class="wechat-profile-empty">未记录</p>'}
+                        `).join('')}
                     </div>
                 </details>
             `).join('');
+            const profileEmpty = !loading && !relationStats.trim() && !sectionHtml
+                ? '<div class="wechat-profile-empty-state">暂无已记录的角色资料</div>' : '';
 
             this.app.phoneShell.setContent(`
                 <style>
@@ -1465,6 +1471,7 @@ export class ContactsView {
                     .wechat-contact-profile .wechat-profile-field b{color:#77717e;font-size:11px;font-weight:500}
                     .wechat-contact-profile .wechat-profile-field p{margin:0;color:#1c1c1e;font-size:12px;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere}
                     .wechat-contact-profile .wechat-profile-empty{margin:4px 0;padding:5px 0;color:#77717e;font-size:11px}
+                    .wechat-contact-profile .wechat-profile-empty-state{margin:8px 0;padding:14px 12px;border-radius:13px;background:#fff;color:#77717e;font-size:12px;text-align:center}
                     .wechat-contact-profile #contact-profile-message{margin:9px 0 0!important}
                 </style>
                 <div class="wechat-app wechat-contact-profile">
@@ -1485,8 +1492,9 @@ export class ContactsView {
                                 ${remark ? `<div class="wechat-profile-remark">备注：${this._escapeHtml(remark)}</div>` : ''}
                             </div>
                         </div>
-                        <div class="wechat-profile-stat-grid">${relationStats}</div>
+                        ${relationStats ? `<div class="wechat-profile-stat-grid">${relationStats}</div>` : ''}
                         ${sectionHtml}
+                        ${profileEmpty}
                         <button id="contact-profile-message" type="button" style="display:block; width:100%; min-height:46px; border:0; border-radius:12px; background:#07c160; color:#fff; font-size:15px; font-weight:600;">
                             发消息
                         </button>
