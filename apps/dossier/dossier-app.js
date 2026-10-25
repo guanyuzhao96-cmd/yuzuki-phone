@@ -160,7 +160,7 @@ export class DossierApp {
         const fieldValue = (fields, labels) => { const f = fields.find(x => labels.includes(x.label)); return f ? f.value : ''; };
         const mvuValue = (...keys) => { for (const key of keys) if (mvu[key] !== undefined && mvu[key] !== null && mvu[key] !== '') return mvu[key]; return ''; };
         const fmt = value => typeof value === 'object' ? formatMvuValue(value) : String(value ?? '');
-        const compact = value => { const s=fmt(value).replace(/\\s+/g,' ').trim(); return s.length>34?s.slice(0,34)+'…':s; };
+        const compact = value => { const s=fmt(value).replace(/\s+/g,' ').trim(); return s.length>34?s.slice(0,34)+'…':s; };
         const unique = fields => { const seen=new Set(); return fields.filter(f=>{const k=String(f.value).toLowerCase().replace(/[“”"\\s，。；、,.!?！？:：]/g,'');if(!k||seen.has(k))return false;seen.add(k);return true;}); };
         const statValues = [
             ['好感度', mvuValue('好感度','affection')],
@@ -289,7 +289,7 @@ export class DossierApp {
     roleList() {
         const query = (this.search || '').trim().toLocaleLowerCase();
         const numberFrom = value => {
-            const match = String(value ?? '').match(/-?\\d+(?:\\.\\d+)?/);
+            const match = String(value ?? '').match(/-?\d+(?:\.\d+)?/);
             return match ? Number(match[0]) : NaN;
         };
         const gradeOrder = ['D','C','B','A','S','SS','SSS'];
@@ -312,7 +312,7 @@ export class DossierApp {
             const savedAvatar = this.prefs().avatars?.[role.id] || '';
             const avatarField = findExact(['头像','头像URL','头像链接','角色头像','立绘']);
             const avatarCandidate = savedAvatar || avatarField;
-            const avatar = /^(https?:\\/\\/|data:image\\/|\\/)/i.test(String(avatarCandidate)) ? String(avatarCandidate) : '';
+            const avatar = /^(https?:\/\/|data:image\/|\/)/i.test(String(avatarCandidate)) ? String(avatarCandidate) : '';
             const searchText = [role.name, role.book, relationship, ...fields.map(field => `${field.label} ${field.value}`)].join(' ').toLocaleLowerCase();
             return { role, mvu, relationship, affection, depravity, beauty, height, gradeRank, cupRank, avatar, searchText };
         }).filter(record => !query || record.searchText.includes(query));
