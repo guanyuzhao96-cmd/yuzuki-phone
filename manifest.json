@@ -1,9 +1,9 @@
 {
     "display_name": "柚月手机·角色档案与系统模块版",
     "name": "yuzuki-phone",
-    "description": "角色档案列表以头像卡片展示姓名、好感度、堕落值和与主角关系，并支持为角色设置头像。",
+    "description": "基于柚月手机的角色档案、任务、校园论坛与系统商店模块：读取世界书和 MVU，展示论坛与商店数据，并通过当前聊天提交互动请求。统一 iOS 风格界面。",
     "author": "yuzuki",
-    "version": "1.6.41",
+    "version": "1.6.42",
     "loading_order": 200,
     "requires": [],
     "optional": [],
