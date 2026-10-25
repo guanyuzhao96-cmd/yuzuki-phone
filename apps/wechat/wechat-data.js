@@ -4180,7 +4180,13 @@ async loadContactsFromCharacter() {
         
         
         // ✅ 解析AI返回
-        const generatedData = this.parseAIResponse(aiResponse);
+        let generatedData = { contacts: [], groups: [], initialTime: null };
+        try {
+            generatedData = this.parseAIResponse(aiResponse) || generatedData;
+        } catch (parseError) {
+            // 联系人名单以 CWB 目录为准；AI 的时间或格式不完整时，不应阻断目录联系人导入。
+            console.warn('⚠️ [微信联系人] AI响应解析失败，将直接使用目录候选名单:', parseError);
+        }
         
         if (!generatedData || !generatedData.contacts) {
             throw new Error('AI返回的数据格式错误');
@@ -4188,8 +4194,17 @@ async loadContactsFromCharacter() {
 
         // 目录白名单保护：不接纳 AI 自行补造或目录中没有的联系人。
         const candidateKeys = new Set(candidates.map(character => normalizeName(character.name)));
-        generatedData.contacts = (Array.isArray(generatedData.contacts) ? generatedData.contacts : [])
+        const parsedContacts = (Array.isArray(generatedData.contacts) ? generatedData.contacts : [])
             .filter(contact => candidateKeys.has(normalizeName(contact?.name)));
+        generatedData.contacts = candidates.map(character => {
+            const key = normalizeName(character.name);
+            const parsed = parsedContacts.find(contact => normalizeName(contact?.name) === key) || {};
+            const fields = character.sources.flatMap(source => Array.isArray(source.fields) ? source.fields : []);
+            const fieldValue = pattern => fields.find(field => pattern.test(String(field.label || '')))?.value || '';
+            const gender = parsed.gender || fieldValue(/^(性别|生理性别)$/);
+            const relation = parsed.relation || fieldValue(/^(与主角关系|和主角关系|当前关系|关系)$/);
+            return { ...parsed, name: character.name, gender, relation };
+        });
 
 
         // ✅ 添加联系人（仅补全缺失，不覆盖已有）
@@ -4729,6 +4744,7 @@ parseAIResponse(text) {
         .split('\n')
         .map(line => line.replace(/^\s*\d+\.\s*/, '').replace(/^[\-•]\s*/, '').trim())
         .filter(Boolean)
+        .filter(line => !/(?:未提供|未新增|无需新增|暂无|无法推断)/.test(line))
         .map(rawLine => {
             let name = rawLine;
             let members = [];
@@ -4767,10 +4783,7 @@ parseAIResponse(text) {
         .filter(Boolean);
 
     const timeBlockMatch = initText.match(/---【初始时间】---([\s\S]*)/);
-    if (!timeBlockMatch) {
-        throw new Error('未找到初始时间段落');
-    }
-    const timeBlock = timeBlockMatch[1];
+    const timeBlock = timeBlockMatch?.[1] || '';
 
     // 🔥 核心修复：年份改为 \d{1,8}，支持 1年 到 99999999年 的修仙/科幻/古代背景
     // 允许年月日和时间之间有任意空格，支持中文冒号
@@ -4780,10 +4793,7 @@ parseAIResponse(text) {
     if (!datetimeLineMatch) {
         // 兜底方案：如果找不到带"年月日："前缀的，直接在段落里找时间格式
         const fallbackMatch = timeBlock.match(/(\d{1,8}年[0-9]{1,2}月[0-9]{1,2}日)\s*([0-9]{1,2}[:：][0-9]{2})/);
-        if (!fallbackMatch) {
-            throw new Error('初始时间格式不完整：AI未按格式返回 年月日 HH:mm');
-        }
-        datetimeLineMatch = [fallbackMatch[0], fallbackMatch[1], fallbackMatch[2]];
+        if (fallbackMatch) datetimeLineMatch = [fallbackMatch[0], fallbackMatch[1], fallbackMatch[2]];
     }
 
     let weekdayStr = '星期一'; // 兜底默认值
@@ -4797,15 +4807,11 @@ parseAIResponse(text) {
         }
     }
 
-    const initialTime = {
+    const initialTime = datetimeLineMatch ? {
         date: datetimeLineMatch[1],
         time: datetimeLineMatch[2].replace('：', ':'), // 兼容中文冒号
         weekday: weekdayStr
-    };
-
-    if (contacts.length === 0 && groups.length === 0) {
-        throw new Error('未解析到任何联系人或群聊');
-    }
+    } : null;
 
     return { contacts, groups, initialTime };
 }
