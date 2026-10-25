@@ -1,9 +1,9 @@
 {
     "display_name": "柚月手机·角色档案与系统模块版",
     "name": "yuzuki-phone",
-    "description": "基于柚月手机的角色档案、任务、校园论坛与系统商店模块：分层读取角色静态资料、动态档案与 MVU 当前状态，精简展示档案字段。",
+    "description": "角色档案精简展示姓名、基础数值、MVU关系、隐私档案、角色已知/未知信息、关系汇总与剧情。",
     "author": "yuzuki",
-    "version": "1.6.28",
+    "version": "1.6.29",
     "loading_order": 200,
     "requires": [],
     "optional": [],
