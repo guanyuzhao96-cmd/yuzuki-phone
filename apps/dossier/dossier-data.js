@@ -37,8 +37,11 @@ export function buildCharacters(books) {
                 || parseFields(entry.content).some(field => field.label === '姓名' && clean(field.value) === name)
             )).map(entry => ({ ...entry, book: book.name, fields: parseFields(entry.content),
                 type: /\[--角色档案开始--\]/.test(entry.content) || /^动态-/.test(entry.comment) ? 'dynamic' : 'static' }));
-            result.push({ id: JSON.stringify([book.name, name]), name, book: book.name, sources,
-                directories: directories.map(entry => ({ uid: entry.uid, comment: entry.comment })) });
+            const role = { id: JSON.stringify([book.name, name]), name, book: book.name, sources,
+                directories: directories.map(entry => ({ uid: entry.uid, comment: entry.comment })) };
+            const hasDynamicData = sources.some(source => source.type === 'dynamic'
+                && source.fields.some(field => !['姓名', '档案类型'].includes(field.label) && String(field.value || '').trim()));
+            if (hasDynamicData) result.push(role);
         }
     }
     return result;
