@@ -1,5 +1,5 @@
-import { CampusForumData } from './campus-forum-data.js?v=1.6.45';
-import { CampusForumView } from './campus-forum-view.js?v=1.6.45';
+import { CampusForumData } from './campus-forum-data.js?v=1.6.46';
+import { CampusForumView } from './campus-forum-view.js?v=1.6.46';
 
 export class CampusForumApp {
     constructor(phoneShell, storage) {
@@ -52,7 +52,7 @@ export class CampusForumApp {
         const link = document.createElement('link');
         link.id = 'campus-forum-css';
         link.rel = 'stylesheet';
-        link.href = new URL('./campus-forum.css?v=1.6.45', import.meta.url).href;
+        link.href = new URL('./campus-forum.css?v=1.6.46', import.meta.url).href;
         document.head.appendChild(link);
     }
 
