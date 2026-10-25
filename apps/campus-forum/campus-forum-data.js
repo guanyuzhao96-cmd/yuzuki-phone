@@ -113,6 +113,21 @@ function safeText(value, maxLength = 600) {
     return String(value ?? '').trim().slice(0, maxLength);
 }
 
+function responseToText(value) {
+    if (typeof value === 'string') return value;
+    if (Array.isArray(value)) {
+        return value.map(part => {
+            if (typeof part === 'string') return part;
+            if (part && typeof part === 'object') return String(part.text || part.content || '');
+            return '';
+        }).filter(Boolean).join('\n');
+    }
+    if (value && typeof value === 'object') {
+        try { return JSON.stringify(value, null, 2); } catch (_) { return String(value); }
+    }
+    return String(value ?? '');
+}
+
 function normalizePost(post = {}, sectionName = '', fallbackDate = '') {
     const title = safeText(post.title || post.标题, 80);
     const author = safeText(post.author || post.作者, 40) || '匿名同学';
@@ -157,6 +172,7 @@ export class CampusForumData {
         this._feed = null;
         this._generatedFeed = this._readGeneratedFeed();
         this._generatePromise = null;
+        this._lastAIResponse = '';
         this._books = [];
         this.lookbackDays = Math.max(3, Math.min(5, Number(this.storage?.get?.('campus_forum_lookback_days') || 5)));
     }
@@ -278,7 +294,12 @@ export class CampusForumData {
         return this._generatePromise;
     }
 
+    getLastAIResponse() {
+        return this._lastAIResponse;
+    }
+
     async _generateFeed() {
+        this._lastAIResponse = '';
         await this.loadWorldbooks(true);
         const selectedBooks = this.getSelectedBooks();
         if (selectedBooks.length === 0) throw new Error('请先在设置中选择一本文字时间线所在的世界书');
@@ -334,11 +355,11 @@ export class CampusForumData {
             } finally {
                 clearTimeout(timeout);
             }
+            const responseText = [response?.summary, response?.content, response?.text, response?.output_text,
+                response?.choices?.[0]?.message?.content].find(value => value !== undefined && value !== null && value !== '') ?? '';
+            rawText = responseToText(responseText);
+            this._lastAIResponse = rawText;
             if (!response?.success) throw new Error(response?.error || '论坛内容生成失败');
-            const responseText = response.summary || response.content || response.text || response.output_text || '';
-            rawText = Array.isArray(responseText)
-                ? responseText.map(part => String(part?.text || part?.content || '')).join('\n').trim()
-                : String(responseText || '').trim();
             try {
                 const candidate = parseJsonPayload(rawText);
                 const candidatePayload = candidate?.论坛 && typeof candidate.论坛 === 'object' ? candidate.论坛 : candidate;
