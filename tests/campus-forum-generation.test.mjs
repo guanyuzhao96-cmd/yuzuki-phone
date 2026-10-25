@@ -131,3 +131,46 @@ test('识别栏目、内容、发布时间字段和字符串评论，并保留�
         assert.equal(result.feed.postsBySection[section][0].date, '2025-09-01');
     }
 });
+
+test('点击帖子卡片后进入可滚动详情并显示评论', () => {
+    const post = {
+        section: '恋爱八卦',
+        title: '测试帖子标题',
+        author: '测试同学',
+        date: '2025-09-01',
+        content: '这是完整的帖子正文。',
+        comments: [{ author: '路过同学', content: '这条评论应在详情中显示。' }]
+    };
+    let cardClick;
+    let renderedHtml = '';
+    const backButton = { addEventListener() {} };
+    const cardButton = {
+        dataset: { forumPostIndex: '0' },
+        addEventListener(eventName, callback) { if (eventName === 'click') cardClick = callback; }
+    };
+    const root = {
+        querySelector(selector) { return selector === '.campus-forum-detail-back' ? backButton : null; },
+        querySelectorAll(selector) { return selector === '[data-forum-post-index]' ? [cardButton] : []; }
+    };
+    const originalDocument = globalThis.document;
+    globalThis.document = { querySelector() { return root; } };
+    try {
+        const view = new CampusForumView({
+            data: {
+                getFeed() { return { storyDate: '2025-09-01', sections: ['恋爱八卦'], postsBySection: { '恋爱八卦': [post] } }; },
+                getBoardState() { return { sections: ['恋爱八卦'] }; },
+                lookbackDays: 5
+            },
+            phoneShell: { setContent(html) { renderedHtml = html; } }
+        });
+        view.render();
+        assert.equal(typeof cardClick, 'function', '帖子卡片应绑定点击事件');
+        cardClick();
+        assert.equal(view.currentView, 'post');
+        assert.match(renderedHtml, /campus-forum-post-detail-scroll/);
+        assert.match(renderedHtml, /这是完整的帖子正文/);
+        assert.match(renderedHtml, /这条评论应在详情中显示/);
+    } finally {
+        globalThis.document = originalDocument;
+    }
+});
