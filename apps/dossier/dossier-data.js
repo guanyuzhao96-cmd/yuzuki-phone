@@ -4,27 +4,46 @@ export const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => 
 const excluded = /系统|任务|提示词|系统点|楼层更新|角色扮演规则|执行规则/;
 
 export function parseFields(content = '') {
-    const fields = [];
+    const fields = [], stack = [];
     let current = null;
-    for (const line of content.split(/\r?\n/)) {
-        const match = line.match(/^\[([^\]]+)\]\s*[:：]\s*(.*)$/)
-            || line.match(/^([^\s<>\[\]:：][^:：]*?)\s*[:：]\s*(.*)$/);
-        if (match) {
-            current = { label: match[1].replace(/\.\d+$/, ''), value: clean(match[2]) };
-            fields.push(current);
-        } else if (current && !/^\s*<\/?|^\[--/.test(line)) {
-            current.value += `${current.value ? '\n' : ''}${line}`;
+    const push = (key, value, path = key) => {
+        const label = String(key || '').replace(/\.\d+$/, '').trim();
+        const text = clean(value);
+        if (!label || !text) return null;
+        const field = { label, key, path, value: text };
+        fields.push(field);
+        return field;
+    };
+    for (const line of String(content || '').split(/\r?\n/)) {
+        if (/^\s*\[--.*--\]\s*$/.test(line) || /^\s*<[^>]+>\s*$/.test(line)) continue;
+        const bracket = line.match(/^\s*\[([^\]]+)\]\s*[:：]\s*(.*)$/);
+        if (bracket) { current = push(bracket[1].trim(), bracket[2], bracket[1].trim()); stack.length = 0; continue; }
+        const yaml = line.match(/^(\s*)([^\s<>\[\]:：][^:：]*?)\s*[:：]\s*(.*)$/);
+        if (yaml) {
+            const indent = yaml[1].replace(/\t/g, '    ').length, key = yaml[2].trim();
+            while (stack.length && stack[stack.length - 1].indent >= indent) stack.pop();
+            const path = stack.map(item => item.key).concat(key).join('/');
+            if (yaml[3].trim()) current = push(key, yaml[3].trim(), path);
+            else { current = null; stack.push({ indent, key }); }
+            continue;
         }
+        const item = line.match(/^\s+-\s+(.*)$/);
+        if (item && stack.length) {
+            const path = stack.map(part => part.key).join('/');
+            const prior = [...fields].reverse().find(field => field.path === path);
+            if (prior) prior.value += '\n• ' + clean(item[1]);
+            else current = push(stack[stack.length - 1].key, '• ' + clean(item[1]), path);
+            continue;
+        }
+        if (current && line.trim() && !/^\s*<\//.test(line)) current.value += '\n' + line.trim();
     }
     return fields.map(field => ({ ...field, value: field.value.trim() }));
 }
 
 export function visibleFields(fields) {
-    return fields.filter(field => !excluded.test(field.label) && !['姓名', '档案类型'].includes(field.label))
-        .map(field => ({ ...field, value: field.value.split(/[；\n]/).filter(part => !excluded.test(part)).join('；') }))
-        .filter(field => field.value);
+    return (fields || []).filter(field => field && !excluded.test(String(field.label || ''))
+        && !['姓名','档案类型'].includes(String(field.label || '')) && String(field.value || '').trim());
 }
-
 export function buildCharacters(books) {
     const result = [];
     for (const book of books) {
@@ -126,18 +145,8 @@ export function latestMvu(chat = []) {
 }
 
 export const MVU_ROLE_FIELDS = [
-    ['grade', '角色等级'],
-    ['relationship', '关系'],
-    ['affection', '好感度'],
-    ['romanceStatus', '恋爱状态'],
-    ['approachStage', '攻略阶段'],
-    ['approachEvidence', '阶段依据'],
-    ['currentGoal', '当前目标'],
-    ['goalProgress', '目标进度'],
-    ['currentMoodOrDesire', '当前状态/欲望'],
-    ['shortTermGoal', '短期目标'],
-    ['longTermGoal', '长期目标'],
-    ['quests', '角色任务'],
+    ['好感度','好感度'], ['欲望值','欲望值'], ['堕落值','堕落值'], ['与主角的关系','与主角的关系'],
+    ['与主角发生过关系','与主角发生过关系'], ['当前目标','当前目标'], ['关联任务','关联任务'],
 ];
 
 export function unwrapMvuData(value) {
