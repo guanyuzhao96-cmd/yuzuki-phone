@@ -1419,14 +1419,54 @@ export class ContactsView {
                     details: fallbackDetails[index].map(label => ({ label, value: '未记录' }))
                 }))
             };
-            const details = Array.isArray(info.details) ? info.details : [];
-            const row = (label, value) => `
-                <div style="display:flex; align-items:flex-start; gap:12px; padding:11px 14px; border-bottom:1px solid rgba(60,60,67,.1);">
-                    <div style="flex:0 0 76px; color:#8e8e93; font-size:13px;">${label}</div>
-                    <div style="flex:1; min-width:0; color:#1c1c1e; font-size:14px; line-height:1.5; white-space:pre-wrap; overflow-wrap:anywhere;">${this._escapeHtml(value || '未记录')}</div>
-                </div>`;
+            const profileSections = Array.isArray(info.sections) ? info.sections : [{ title: '角色档案', details: info.details || [] }];
+            const relationSection = profileSections.find(section => section.title === '关系数值');
+            const relationFields = Array.isArray(relationSection?.details) ? relationSection.details : fallbackDetails[0].map(label => ({ label, value: '未记录' }));
+            const relationStats = relationFields.map(field => `
+                <div class="wechat-profile-stat">
+                    <span>${this._escapeHtml(field.label)}</span>
+                    <b>${this._escapeHtml(loading ? '读取中…' : field.value || '未记录')}</b>
+                </div>`).join('');
+            const contentSections = profileSections.filter(section => section !== relationSection);
+            const sectionHtml = contentSections.map((section, index) => `
+                <details class="wechat-profile-group" ${index === 0 ? 'open' : ''}>
+                    <summary>${this._escapeHtml(section.title || '角色档案')}<span>${Array.isArray(section.details) ? section.details.length : 0} 项</span></summary>
+                    <div class="wechat-profile-fields">
+                        ${(Array.isArray(section.details) ? section.details : []).map(field => `
+                            <div class="wechat-profile-field"><b>${this._escapeHtml(field.label || '')}</b><p>${this._escapeHtml(loading ? '读取中…' : field.value || '未记录')}</p></div>
+                        `).join('') || '<p class="wechat-profile-empty">未记录</p>'}
+                    </div>
+                </details>
+            `).join('');
 
             this.app.phoneShell.setContent(`
+                <style>
+                    .wechat-contact-profile{height:100%;min-height:0;display:flex;flex-direction:column;overflow:hidden;background:#f2f2f7;color:#1c1c1e}
+                    .wechat-contact-profile .wechat-header{flex:0 0 68px}
+                    .wechat-contact-profile .wechat-content{display:block!important;flex:1 1 0;min-height:0;min-width:0;overflow-x:hidden!important;overflow-y:auto!important;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;touch-action:pan-y!important;box-sizing:border-box;padding:10px 10px 18px!important}
+                    .wechat-contact-profile .wechat-profile-hero{display:flex;align-items:center;gap:12px;margin:2px 0 9px;padding:13px;border:1px solid rgba(60,60,67,.1);border-radius:16px;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.035)}
+                    .wechat-contact-profile .wechat-profile-avatar{width:48px;height:48px;flex:0 0 48px;overflow:hidden;border-radius:13px}
+                    .wechat-contact-profile .wechat-profile-identity{min-width:0;flex:1}
+                    .wechat-contact-profile .wechat-profile-name{font-size:19px;line-height:1.3;font-weight:700;overflow-wrap:anywhere}
+                    .wechat-contact-profile .wechat-profile-remark{margin-top:3px;color:#77717e;font-size:11px}
+                    .wechat-contact-profile .wechat-profile-stat-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin:8px 0 10px}
+                    .wechat-contact-profile .wechat-profile-stat{min-width:0;padding:9px 10px;border:1px solid rgba(60,60,67,.1);border-radius:13px;background:#fff}
+                    .wechat-contact-profile .wechat-profile-stat span{display:block;color:#77717e;font-size:10px;line-height:1.35}
+                    .wechat-contact-profile .wechat-profile-stat b{display:block;margin-top:3px;font-size:14px;line-height:1.35;overflow-wrap:anywhere}
+                    .wechat-contact-profile .wechat-profile-stat:first-child,.wechat-contact-profile .wechat-profile-stat:nth-child(2){background:#f5effa;border-color:#e7dbef}
+                    .wechat-contact-profile .wechat-profile-group{display:block;margin:7px 0;padding:0;border:1px solid rgba(60,60,67,.1);border-radius:14px;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.035);overflow:hidden}
+                    .wechat-contact-profile .wechat-profile-group summary{display:flex;align-items:center;gap:8px;min-height:40px;padding:9px 11px;cursor:pointer;font-size:13px;font-weight:650;list-style:none}
+                    .wechat-contact-profile .wechat-profile-group summary::-webkit-details-marker{display:none}
+                    .wechat-contact-profile .wechat-profile-group summary:after{content:'＋';margin-left:auto;color:#77717e}
+                    .wechat-contact-profile .wechat-profile-group[open] summary:after{content:'－'}
+                    .wechat-contact-profile .wechat-profile-group summary span{color:#77717e;font-size:10px;font-weight:400}
+                    .wechat-contact-profile .wechat-profile-fields{padding:0 11px 4px}
+                    .wechat-contact-profile .wechat-profile-field{display:grid;grid-template-columns:minmax(70px,30%) minmax(0,1fr);gap:8px;padding:8px 0;border-top:1px solid rgba(60,60,67,.09)}
+                    .wechat-contact-profile .wechat-profile-field b{color:#77717e;font-size:11px;font-weight:500}
+                    .wechat-contact-profile .wechat-profile-field p{margin:0;color:#1c1c1e;font-size:12px;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere}
+                    .wechat-contact-profile .wechat-profile-empty{margin:4px 0;padding:5px 0;color:#77717e;font-size:11px}
+                    .wechat-contact-profile #contact-profile-message{margin:9px 0 0!important}
+                </style>
                 <div class="wechat-app wechat-contact-profile">
                     <div class="wechat-header">
                         <div class="wechat-header-left">
@@ -1437,21 +1477,17 @@ export class ContactsView {
                         <div class="wechat-header-title">联系人资料</div>
                         <div class="wechat-header-right"></div>
                     </div>
-                    <div class="wechat-content" style="background:#f2f2f7; padding:16px 12px 24px; overflow-y:auto; -webkit-overflow-scrolling:touch;">
-                        <div style="display:flex; align-items:center; gap:14px; padding:16px; margin-bottom:12px; background:#fff; border-radius:14px;">
-                            <div style="width:58px; height:58px; flex:0 0 58px; overflow:hidden; border-radius:12px;">${avatar}</div>
-                            <div style="min-width:0;">
-                                <div style="font-size:19px; line-height:1.3; font-weight:650; color:#1c1c1e; overflow-wrap:anywhere;">${name}</div>
-                                ${remark ? `<div style="margin-top:4px; font-size:12px; color:#8e8e93;">备注：${this._escapeHtml(remark)}</div>` : ''}
+                    <div class="wechat-content">
+                        <div class="wechat-profile-hero">
+                            <div class="wechat-profile-avatar">${avatar}</div>
+                            <div class="wechat-profile-identity">
+                                <div class="wechat-profile-name">${name}</div>
+                                ${remark ? `<div class="wechat-profile-remark">备注：${this._escapeHtml(remark)}</div>` : ''}
                             </div>
                         </div>
-                        ${(Array.isArray(info.sections) ? info.sections : [{ title: '角色档案', details }]).map(section => `
-                            <section style="overflow:hidden; margin-bottom:12px; background:#fff; border-radius:14px;">
-                                <div style="padding:12px 14px 7px; color:#07a653; font-size:13px; font-weight:650;">${this._escapeHtml(section.title || '角色档案')}</div>
-                                ${(Array.isArray(section.details) ? section.details : []).map(field => row(this._escapeHtml(field.label), loading ? '读取中…' : field.value)).join('')}
-                            </section>
-                        `).join('')}
-                        <button id="contact-profile-message" type="button" style="display:block; width:100%; min-height:46px; margin-top:16px; border:0; border-radius:12px; background:#07c160; color:#fff; font-size:16px; font-weight:600;">
+                        <div class="wechat-profile-stat-grid">${relationStats}</div>
+                        ${sectionHtml}
+                        <button id="contact-profile-message" type="button" style="display:block; width:100%; min-height:46px; border:0; border-radius:12px; background:#07c160; color:#fff; font-size:15px; font-weight:600;">
                             发消息
                         </button>
                     </div>
