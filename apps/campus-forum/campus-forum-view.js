@@ -38,7 +38,7 @@ export class CampusForumView {
         const postCards = posts.map((post, index) => `
             <article class="campus-forum-post">
                 <button class="campus-forum-post-open" type="button" data-forum-post-index="${index}" aria-label="打开帖子：${this._escape(post.title)}">
-                    <div class="campus-forum-post-meta"><span>${this._escape(post.author || '匿名同学')}</span><time>${this._escape(post.date || feed?.storyDate || '')}</time></div>
+                    <div class="campus-forum-post-meta"><span>${this._escape(post.author || '匿名同学')} <small>@${this._escape(post.userId || '')}</small></span><time>${this._escape(post.date || feed?.storyDate || '')}</time></div>
                     <h2>${this._escape(post.title)}</h2>
                     <div class="campus-forum-post-body">${this._escape(post.content)}</div>
                     <div class="campus-forum-post-footer"><span><i class="fa-regular fa-comment"></i> ${Array.isArray(post.comments) ? post.comments.length : 0} 条评论</span><span>查看详情 <i class="fa-solid fa-chevron-right"></i></span></div>
@@ -51,7 +51,7 @@ export class CampusForumView {
                 ${hotspots.map(item => `<div class="campus-forum-hotspot"><time>${this._escape(item.date)}</time><div><b>${this._escape(item.event)}</b><small>${this._escape(item.basis)} · 热度${this._escape(item.heat)}</small></div></div>`).join('')}
             </section>` : '';
         const empty = feed
-            ? `<div class="campus-forum-empty">这个栏目还没有帖子。刷新论坛后会生成 3–5 条。</div>`
+            ? `<div class="campus-forum-empty">这个栏目还没有帖子。刷新论坛后会生成 1–2 条。</div>`
             : `<div class="campus-forum-empty"><div class="campus-forum-empty-icon">🏫</div><b>还没有论坛内容</b><span>点击“刷新论坛”，帖子会直接生成并显示在这里。</span></div>`;
         const status = feed
             ? `<div class="campus-forum-source-note">剧情日期 ${this._escape(feed.storyDate || '未记录')} · 参考 ${this._escape((feed.sourceBooks || []).join('、') || '未选择世界书')}</div>`
@@ -106,7 +106,7 @@ export class CampusForumView {
         this.currentView = 'post';
         const comments = Array.isArray(post.comments) ? post.comments : [];
         const commentHtml = comments.length
-            ? comments.map(comment => `<div class="campus-forum-comment"><b>${this._escape(comment.author || '路过同学')}</b><span>${this._escape(comment.content || '')}</span></div>`).join('')
+            ? comments.map(comment => `<div class="campus-forum-comment"><div class="campus-forum-comment-meta"><b>${this._escape(comment.author || '路过同学')}</b><small>@${this._escape(comment.userId || '')}${comment.date ? ` · ${this._escape(comment.date)}` : ''}</small></div><span>${this._escape(comment.content || '')}</span></div>`).join('')
             : '<div class="campus-forum-no-comments">这条帖子暂时没有评论。</div>';
         this._setContent(`
             <div class="campus-forum-app campus-forum-post-page">
@@ -117,7 +117,7 @@ export class CampusForumView {
                 </header>
                 <main class="campus-forum-post-detail-scroll">
                     <article class="campus-forum-post-detail">
-                        <div class="campus-forum-post-meta"><span>${this._escape(post.author || '匿名同学')}</span><time>${this._escape(post.date || '')}</time></div>
+                        <div class="campus-forum-post-meta"><span>${this._escape(post.author || '匿名同学')} <small>@${this._escape(post.userId || '')}</small></span><time>${this._escape(post.date || '')}</time></div>
                         <h1>${this._escape(post.title || '未命名帖子')}</h1>
                         <div class="campus-forum-post-detail-body">${this._escape(post.content || '')}</div>
                     </article>
