@@ -38,7 +38,7 @@ import {
 } from './apps/mofo/mofo-renderer.js';
 
 const ST_PHONE_BASE_URL = new URL('./', import.meta.url).href;
-const ST_PHONE_VERSION = '1.6.20';
+const ST_PHONE_VERSION = '1.6.21';
 const ST_PHONE_CSS_REVISION = '20261020-ios-complete-theme-v3';
 const ST_PHONE_APP_SWIPE_REVISION = '20261002-wechat-chat-return';
 const ST_PHONE_ALBUM_MODULE_REVISION = '20261006-story-image-outside-close';
@@ -149,6 +149,7 @@ const ST_PHONE_CURRENT_UPDATE = {
     version: ST_PHONE_VERSION,
     date: '2026-10-25',
     items: [
+        '【入口修复】手机入口优先显示在顶部工具栏；没有顶部工具栏时再放入扩展菜单。',
         '【论坛】刷新论坛改为插件页内直接调用 API 生成并展示帖子与热点，结果按当前聊天保存，不再要求发送聊天请求。',
         '【修复】更新检查改为读取 guanyuzhao96-cmd 的 feat/read-only-character-dossier 分支，避免误查旧上游版本。',
         '【修复】任务系统改为按钮级绑定点击事件，并更新模块缓存标记，修复任务生成按钮无响应。'
@@ -1474,7 +1475,7 @@ if (window.GGP_Loaded) {
             imageGenerationManagerModule,
             worldbookManagerModule
         ] = await Promise.all([
-            import('./config/apps.js?v=1.6.20'),
+            import('./config/apps.js?v=1.6.21'),
             import('./config/storage.js?v=20261006-story-upload-console-cleanup'),
             import('./config/api-manager.js?v=20261009-unified-sse-parser'),
             import('./config/time-manager.js'),    // 👈 取消懒加载
@@ -5846,7 +5847,8 @@ if (window.GGP_Loaded) {
     function createTopPanel() {
         const extensionsMenu = document.getElementById('extensionsMenu');
         const topSettingsHolder = document.getElementById('top-settings-holder');
-        const toolPanelHost = extensionsMenu || topSettingsHolder;
+        const toolPanelHost = topSettingsHolder || extensionsMenu;
+        const useExtensionsMenu = !topSettingsHolder && !!extensionsMenu;
         if (!toolPanelHost) {
             console.error('❌ 找不到手机入口挂载点');
             return;
@@ -5861,7 +5863,7 @@ if (window.GGP_Loaded) {
         const iconStyle = isEnabled ? '' : 'opacity: 0.4; filter: grayscale(1);';
         const statusText = isEnabled ? '已启用' : '已禁用';
 
-        const triggerHTML = extensionsMenu ? `
+        const triggerHTML = useExtensionsMenu ? `
             <div id="phoneDrawerToolEntry" class="extension_container interactable" tabindex="0">
                 <div id="phoneDrawerToolRow" class="list-group-item flex-container flexGap5 interactable"
                      tabindex="0"
