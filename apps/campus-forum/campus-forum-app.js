@@ -1,5 +1,5 @@
-import { CampusForumData } from './campus-forum-data.js?v=1.6.47';
-import { CampusForumView } from './campus-forum-view.js?v=1.6.47';
+import { CampusForumData } from './campus-forum-data.js?v=1.6.48';
+import { CampusForumView } from './campus-forum-view.js?v=1.6.48';
 
 export class CampusForumApp {
     constructor(phoneShell, storage) {
@@ -23,6 +23,7 @@ export class CampusForumApp {
         for (const name of ['MESSAGE_RECEIVED', 'MESSAGE_UPDATED', 'MESSAGE_DELETED', 'MESSAGE_SWIPED', 'GENERATION_ENDED']) {
             const type = context.event_types?.[name];
             if (type) context.eventSource?.on(type, () => {
+                this.data._preferGeneratedFeed = false;
                 if (!this.isActive()) return;
                 clearTimeout(this._refreshTimer);
                 this._refreshTimer = setTimeout(() => this.refreshFromMvu(), name === 'GENERATION_ENDED' ? 250 : 500);
@@ -49,7 +50,7 @@ export class CampusForumApp {
         const link = document.createElement('link');
         link.id = 'campus-forum-css';
         link.rel = 'stylesheet';
-        link.href = new URL('./campus-forum.css?v=1.6.47', import.meta.url).href;
+        link.href = new URL('./campus-forum.css?v=1.6.48', import.meta.url).href;
         document.head.appendChild(link);
     }
 
