@@ -184,11 +184,16 @@ export class DossierApp {
         appendPrivate('性经历人员',['性经历人员'],'dynamic');
         appendPrivate('性癖',['性癖','性偏好'],'static');
         appendPrivate('秘密',['秘密','秘密钩子','隐藏秘密'],'static');
-        const privateHtml=privateFields.length?this.section('私密档案',privateFields):'';
+        const renderFields=fields=>fields.map(f=>'<div class="field"><b>'+e(f.label)+'</b><p>'+e(f.value)+'</p></div>').join('');
+        const privateHtml=privateFields.length
+            ?'<details class="profile-group"><summary>性经历与隐私<span class="group-count">'+privateFields.length+' 项</span></summary><div class="fields">'+renderFields(privateFields)+'</div></details>':'';
         const known=unique(dynamicFields.filter(f=>f.label==='角色已知信息'));
         const unknown=unique(dynamicFields.filter(f=>f.label==='角色未知信息'));
-        const knownHtml=known.length?this.section('知道的事',known):'';
-        const unknownHtml=unknown.length?this.section('未知的事',unknown):'';
+        const knowledgeHtml=known.length||unknown.length
+            ?'<details class="profile-group"><summary>知道的事与未知的事<span class="group-count">'+(known.length+unknown.length)+' 项</span></summary><div class="fields">'+
+                (known.length?'<div class="field"><b>知道的事</b><ul>'+known.map(f=>'<li>'+e(f.value)+'</li>').join('')+'</ul></div>':'')+
+                (unknown.length?'<div class="field"><b>未知的事</b><ul>'+unknown.map(f=>'<li>'+e(f.value)+'</li>').join('')+'</ul></div>':'')+
+                '</div></details>':'';
         const relations=(role.otherRelationships||[]).map(r=>({label:r.left+' '+r.direction+' '+r.right,value:r.description,source:r.book+' / '+r.comment+' · UID '+r.uid}));
         const relationHtml=relations.length?this.section('与其他角色的关系',relations):'';
         const plot=unique(dynamicFields.filter(f=>f.label==='剧情')).map((f,i)=>({...f,label:'记录 '+(i+1)}));
@@ -208,8 +213,7 @@ export class DossierApp {
         return '<article class="profile-hero"><span class="profile-kicker">角色档案</span><h2>'+e(role.name)+'</h2></article>'+
             (statValues.length?'<div class="stat-grid">'+statValues.map(x=>'<div class="stat-card"><div class="stat-label">'+e(x[0])+'</div><div class="stat-value">'+e(compact(x[1]))+'</div></div>').join('')+'</div>':'')+
             (basics?'<div class="basic-grid">'+basics+'</div>':'')+picker('static','基础资料来源',staticChoice)+
-            (privateHtml?'<details class="profile-group"><summary>性经历与隐私<span class="group-count">'+privateFields.length+' 项</span></summary><div class="fields">'+privateHtml+'</div></details>':'')+
-            knownHtml+unknownHtml+relationHtml+plotHtml+picker('dynamic','动态资料来源',dynamicChoice)+
+            privateHtml+knowledgeHtml+relationHtml+plotHtml+picker('dynamic','动态资料来源',dynamicChoice)+
             sourceTable+'<details><summary>原始资料</summary>'+raw(staticSource)+raw(dynamicSource)+'</details>'+
             '<small>只显示指定字段；长档案已折叠。读取时间：'+e(this.readAt||'尚未读取')+'</small>';
     }
