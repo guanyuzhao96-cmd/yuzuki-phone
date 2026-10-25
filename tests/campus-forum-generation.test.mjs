@@ -101,3 +101,33 @@ test('生成失败时保留完整 AI 原文，并可下载为 txt 文件', async
         delete window.URL;
     }
 });
+
+test('识别栏目、内容、发布时间字段和字符串评论，并保留合规树洞帖子', async () => {
+    const saved = new Map();
+    const storage = {
+        get(key, fallback) { return saved.has(key) ? saved.get(key) : fallback; },
+        set(key, value) { saved.set(key, value); }
+    };
+    const posts = CAMPUS_FORUM_PUBLIC_SECTIONS.flatMap(section => Array.from({ length: 3 }, (_, index) => ({
+        栏目: section,
+        标题: `${section}兼容测试帖${index + 1}`,
+        作者: `同学${index + 1}`,
+        发布时间: '2025-09-01 13:20',
+        内容: section === '匿名树洞' && index === 2
+            ? '关于朋友间的秘密，要不要说出来？这里只讨论一般困惑，不涉及任何具体角色的隐私。'
+            : '迎新活动后，同学分享了公开现场见闻，内容不推断他人的关系。',
+        热度: '168',
+        评论: ['别偷拍，尊重他人。', '我也参加了公开活动。']
+    })));
+    window.VirtualPhone.apiManager = {
+        async callAI() { return { success: true, summary: JSON.stringify({ 帖子: posts, 热点: [] }) }; }
+    };
+
+    const data = new CampusForumData(storage);
+    const result = await data.generateFeed();
+    for (const section of CAMPUS_FORUM_PUBLIC_SECTIONS) {
+        assert.equal(result.feed.postsBySection[section].length, 3, `${section}应读取三条帖子`);
+        assert.equal(result.feed.postsBySection[section][0].comments[0].content, '别偷拍，尊重他人。');
+        assert.equal(result.feed.postsBySection[section][0].date, '2025-09-01');
+    }
+});
