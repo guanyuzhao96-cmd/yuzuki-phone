@@ -143,6 +143,7 @@ export class CampusForumData {
         this.storage = storage;
         this.worldbookManager = window.VirtualPhone?.worldbookManager;
         this._feed = null;
+        this._feedScopeKey = '';
         this._books = [];
         this.lookbackDays = Math.max(3, Math.min(5, Number(this.storage?.get?.('campus_forum_lookback_days') || 5)));
     }
@@ -155,8 +156,11 @@ export class CampusForumData {
     }
 
     getFeed() {
-        if (this._feed) return this._feed;
-        const saved = this.storage?.get?.(this._getFeedKey(), null);
+        const scopeKey = this._getFeedKey();
+        if (this._feedScopeKey === scopeKey && this._feed) return this._feed;
+        this._feedScopeKey = scopeKey;
+        this._feed = null;
+        const saved = this.storage?.get?.(scopeKey, null);
         try {
             this._feed = typeof saved === 'string' ? JSON.parse(saved) : saved;
         } catch (_error) {
@@ -166,12 +170,14 @@ export class CampusForumData {
     }
 
     async saveFeed(feed) {
+        this._feedScopeKey = this._getFeedKey();
         this._feed = feed;
-        await this.storage?.set?.(this._getFeedKey(), JSON.stringify(feed));
+        await this.storage?.set?.(this._feedScopeKey, JSON.stringify(feed));
         return feed;
     }
 
     async loadWorldbooks(force = true) {
+        this.lookbackDays = Math.max(3, Math.min(5, Number(this.storage?.get?.('campus_forum_lookback_days') || 5)));
         const manager = window.VirtualPhone?.worldbookManager || this.worldbookManager;
         if (!manager?.listAvailableWorldbooks) throw new Error('世界书读取器尚未就绪');
         this.worldbookManager = manager;
