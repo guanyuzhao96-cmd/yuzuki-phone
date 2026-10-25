@@ -46,18 +46,33 @@ export function visibleFields(fields) {
 }
 export function buildCharacters(books) {
     const result = [];
-    for (const book of books) {
+    const allRelationships = parseCharacterRelationships(books || []);
+    const counts = new Map();
+    for (const relation of allRelationships) {
+        counts.set(relation.left, (counts.get(relation.left) || 0) + 1);
+        counts.set(relation.right, (counts.get(relation.right) || 0) + 1);
+    }
+    const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+    const protagonistName = ranked.length && ranked[0][1] >= 2 && (!ranked[1] || ranked[1][1] < ranked[0][1]) ? ranked[0][0] : '';
+    for (const book of books || []) {
         const entries = Array.isArray(book.entries) ? book.entries : Object.values(book.entries || {});
         const directories = entries.filter(entry => /^CWB目录/.test(entry.comment || '') || /【小故事线目录】/.test(entry.content || ''));
-        const names = new Set(directories.flatMap(entry => [...entry.content.matchAll(/^\s*姓名\s*[:：]\s*["“]?([^"”\r\n]+)["”]?\s*$/gm)].map(match => clean(match[1]))));
+        const names = new Set(directories.flatMap(entry => [...String(entry.content || '').matchAll(/^\s*姓名\s*[:：]\s*["“]?([^"”\r\n]+)["”]?\s*$/gm)].map(match => clean(match[1]))));
         for (const name of names) {
             const sources = entries.filter(entry => !directories.includes(entry) && (
                 clean(entry.comment) === name || clean(entry.comment) === `动态-${name}`
                 || parseFields(entry.content).some(field => field.label === '姓名' && clean(field.value) === name)
             )).map(entry => ({ ...entry, book: book.name, fields: parseFields(entry.content),
                 type: /\[--角色档案开始--\]/.test(entry.content) || /^动态-/.test(entry.comment) ? 'dynamic' : 'static' }));
+            const related = allRelationships.filter(item => item.left === name || item.right === name);
+            const otherRelationships = related.filter(item => {
+                const other = item.left === name ? item.right : item.left;
+                return other && other !== name && other !== protagonistName;
+            });
+            const relationshipSources = [...new Map(otherRelationships.map(item => [JSON.stringify([item.book,item.comment,item.uid]), item])).values()];
             const role = { id: JSON.stringify([book.name, name]), name, book: book.name, sources,
-                directories: directories.map(entry => ({ uid: entry.uid, comment: entry.comment })) };
+                directories: directories.map(entry => ({ uid: entry.uid, comment: entry.comment })),
+                otherRelationships, relationshipSources, protagonistName };
             const hasDynamicData = sources.some(source => source.type === 'dynamic'
                 && source.fields.some(field => !['姓名', '档案类型'].includes(field.label) && String(field.value || '').trim()));
             if (hasDynamicData) result.push(role);
@@ -65,9 +80,8 @@ export function buildCharacters(books) {
     }
     return result;
 }
-
 export function parseCharacterRelationships(books) {
-    const relationships = [];
+    const latest = new Map();
     for (const book of books || []) {
         const entries = Array.isArray(book.entries) ? book.entries : Object.values(book.entries || {});
         for (const entry of entries) {
@@ -77,20 +91,17 @@ export function parseCharacterRelationships(books) {
             for (const line of String(entry.content || '').split(/\r?\n/)) {
                 const match = line.match(/^\s*(.+?)\s*(↔|→|←)\s*(.+?)\s*[:：]\s*(.+?)\s*$/);
                 if (!match) continue;
-                const [, left, direction, right, description] = match;
-                relationships.push({
-                    left: clean(left),
-                    right: clean(right),
-                    direction,
-                    description: clean(description),
-                    book: book.name || ''
-                });
+                const [, rawLeft, direction, rawRight, description] = match;
+                const left = clean(rawLeft), right = clean(rawRight);
+                if (!left || !right) continue;
+                const pair = [left, right].sort().join('\u0000');
+                latest.set(pair, { left, right, direction, description: clean(description),
+                    book: book.name || '', comment: entry.comment || '', uid: entry.uid ?? '' });
             }
         }
     }
-    return relationships;
+    return [...latest.values()];
 }
-
 export function findCharacterRelationship(relationships, contactNames = [], userNames = []) {
     const contacts = new Set((contactNames || []).map(clean).filter(Boolean));
     const users = new Set((userNames || []).map(clean).filter(Boolean));
