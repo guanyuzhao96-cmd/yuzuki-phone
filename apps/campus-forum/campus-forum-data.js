@@ -139,7 +139,7 @@ function responseToText(value) {
 
 function normalizePost(post = {}, sectionName = '', fallbackDate = '') {
     const title = safeText(post.title || post.标题, 80);
-    const author = safeText(post.author || post.作者, 40) || '匿名同学';
+    const author = safeText(post.author || post.作者 || post.发帖人, 40) || '匿名同学';
     const content = safeText(post.content || post.body || post.正文 || post.内容, 600);
     if (!title || !content) return null;
     const commentsRaw = Array.isArray(post.comments) ? post.comments : (Array.isArray(post.评论) ? post.评论 : []);
@@ -149,6 +149,7 @@ function normalizePost(post = {}, sectionName = '', fallbackDate = '') {
             author: safeText(comment?.author || comment?.作者, 40) || '路过同学',
             content: safeText(comment?.content || comment?.内容, 300)
         }).filter(comment => comment.content);
+    if (!comments.length) comments.push({ author: '路过同学', content: '蹲后续，感谢分享。' });
     const imagePrompt = safeText(post.imagePrompt || post.image_prompt || post.配图提示 || post.图片提示 || '', 1200)
         || defaultForumImagePrompt(sectionName, title, content);
     return {
@@ -164,6 +165,22 @@ function normalizePost(post = {}, sectionName = '', fallbackDate = '') {
         imageStatus: imagePrompt ? 'pending' : 'none',
         imageError: ''
     };
+}
+
+function normalizePostCollection(value, allowedSections = []) {
+    if (Array.isArray(value)) return value;
+    if (!value || typeof value !== 'object') return null;
+    const allowed = new Set(allowedSections);
+    const posts = [];
+    Object.entries(value).forEach(([section, sectionPosts]) => {
+        if (!Array.isArray(sectionPosts) || !allowed.has(section)) return;
+        sectionPosts.forEach(post => {
+            if (post && typeof post === 'object' && !Array.isArray(post)) {
+                posts.push({ ...post, 板块: post.板块 || post.section || post.栏目 || section });
+            }
+        });
+    });
+    return posts;
 }
 
 function extractMvuForumState(context = {}) {
@@ -455,8 +472,9 @@ export class CampusForumData {
             try {
                 const candidate = parseJsonPayload(rawText);
                 const candidatePayload = candidate?.论坛 && typeof candidate.论坛 === 'object' ? candidate.论坛 : candidate;
-                const candidatePosts = candidatePayload?.帖子 || candidatePayload?.帖子列表 || candidatePayload?.posts
+                const candidatePostValue = candidatePayload?.帖子 || candidatePayload?.帖子列表 || candidatePayload?.posts
                     || candidatePayload?.forumPosts || candidatePayload?.forum_view;
+                const candidatePosts = normalizePostCollection(candidatePostValue, sections);
                 if (!Array.isArray(candidatePosts)) throw new Error('论坛生成结果缺少帖子列表');
                 const sectionCounts = Object.fromEntries(sections.map(section => [section, 0]));
                 candidatePosts.forEach(post => {
@@ -476,7 +494,8 @@ export class CampusForumData {
             throw new Error(`${parseError?.message || '论坛 JSON 解析失败'}；已自动重试一次。模型返回：${preview || '（空内容）'}`);
         }
         const payload = parsed?.论坛 && typeof parsed.论坛 === 'object' ? parsed.论坛 : parsed;
-        const rawPosts = payload?.帖子 || payload?.帖子列表 || payload?.posts || payload?.forumPosts || payload?.forum_view || [];
+        const rawPostValue = payload?.帖子 || payload?.帖子列表 || payload?.posts || payload?.forumPosts || payload?.forum_view || [];
+        const rawPosts = normalizePostCollection(rawPostValue, sections);
         if (!Array.isArray(rawPosts)) throw new Error('论坛生成结果缺少帖子列表');
         const postsBySection = Object.fromEntries(sections.map(section => [section, []]));
         rawPosts.slice(0, 35).forEach(rawPost => {
