@@ -1077,7 +1077,18 @@ export class ChatView {
         const formalName = roleArchive?.name || matchingCharacter?.name || matchingCharacter?.data?.name || contactName;
         const mvuMatch = formalName ? findMvuRole(mvuSnapshot?.data, formalName) : { status: 'missing', role: null };
         const mvuRole = mvuMatch.status === 'matched' ? mvuMatch.role : null;
-        const normalizeFieldKey = value => String(value || '').toLowerCase().replace(/[\s_-]/g, '');
+        const normalizeFieldKey = value => String(value || '').toLowerCase().replace(/[\s_\-\/／·：:（）()【】\[\]]/g, '');
+        const roleSources = Array.isArray(roleArchive?.sources) ? roleArchive.sources : [];
+        const archiveFields = roleSources.flatMap(source => (Array.isArray(source.fields) ? source.fields : [])
+            .map(field => ({ ...field, sourceType: source.type || 'static' })));
+        const getArchiveField = (aliases = [], { dynamicFirst = false } = {}) => {
+            const expected = new Set(aliases.map(normalizeFieldKey));
+            const ordered = dynamicFirst
+                ? [...archiveFields.filter(field => field.sourceType === 'dynamic'), ...archiveFields.filter(field => field.sourceType !== 'dynamic')]
+                : [...archiveFields.filter(field => field.sourceType !== 'dynamic'), ...archiveFields.filter(field => field.sourceType === 'dynamic')];
+            const field = ordered.find(item => expected.has(normalizeFieldKey(item.label)) && String(item.value || '').trim());
+            return field ? String(field.value).trim() : undefined;
+        };
         const getMvuField = (aliases = []) => {
             if (!mvuRole) return undefined;
             const expected = new Set(aliases.map(normalizeFieldKey));
@@ -1097,6 +1108,7 @@ export class ChatView {
             return visit(mvuRole);
         };
         const formatProfileValue = value => {
+            if (value === undefined || value === null || value === '') return '未记录';
             if (typeof value === 'boolean') return value ? '是' : '否';
             if (value && typeof value === 'object') {
                 if (Object.keys(value).length === 0) return '未记录';
@@ -1107,26 +1119,80 @@ export class ChatView {
             }
             return formatMvuValue(value);
         };
-        const fields = [
-            ['好感度', ['好感度', 'affection']],
-            ['欲望值', ['欲望值', 'desire', 'desireValue', 'libido', 'libidoValue']],
-            ['堕落值', ['堕落值', 'corruption', 'corruptionValue', 'depravity']],
-            ['与主角的关系', ['与主角的关系', '与主角关系', 'relationship']],
-            ['与主角发生过关系', ['与主角发生过关系', '与主角发生关系', 'hasSexWithProtagonist']],
-            ['性经历人数', ['性经历人数', 'sexualHistoryCount']],
-            ['性经历人员', ['性经历人员', 'sexualHistoryPeople']],
-            ['当前目标', ['当前目标', 'currentGoal']],
-            ['关联任务', ['关联任务', 'linkedTask', 'boundTask']]
+        const fieldSpecs = [
+            ['年龄', 'archive', ['年龄', 'age']],
+            ['国籍', 'archive', ['国籍', '籍贯/国籍', 'nationality', 'country']],
+            ['职业/身份', 'archive', ['职业/身份', '职业', '身份', 'occupation', 'identity', 'job']],
+            ['学校', 'archive', ['学校', '院校', 'school', 'university']],
+            ['校花榜排名', 'archive', ['校花榜排名', '校花排名', '排名', 'campusBeautyRank']],
+            ['性格', 'archive', ['性格', 'personality']],
+            ['隐藏特质', 'archive', ['隐藏特质', '隐藏性格', '秘密特质', 'hiddenTraits']],
+            ['颜值', 'archive', ['颜值', '颜值评分', '外貌评分', 'looks', 'beauty']],
+            ['身高', 'archive', ['身高', 'height']],
+            ['罩杯', 'archive', ['罩杯', 'cupSize', 'bust']],
+            ['外貌', 'archive', ['外貌', '外形', 'appearance']],
+            ['背景', 'archive', ['背景', '人物背景', 'background', 'backstory']],
+            ['固定喜好', 'archive', ['固定喜好', '喜好', '偏好', 'preferences', 'likes']],
+            ['与主角关系', 'mvu', ['与主角的关系', '与主角关系', 'relationship']],
+            ['恋爱状态', 'archive', ['恋爱状态', '感情状态', '恋爱关系', 'relationshipStatus', 'romanceStatus']],
+            ['好感度', 'mvu', ['好感度', '好感', 'affection']],
+            ['攻略进度', 'archive', ['攻略进度', '关系进度', '攻略阶段', 'relationshipProgress', 'romanceProgress']],
+            ['当前目标与进度', 'goal', ['当前目标', 'currentGoal']],
+            ['当前状态', 'archive-dynamic', ['当前状态', '角色状态', '状态', 'currentStatus', 'status']],
+            ['短期目标', 'archive-dynamic', ['短期目标', '近期目标', 'shortTermGoal', 'shortGoal']],
+            ['长期目标', 'archive', ['长期目标', '人生目标', 'longTermGoal', 'longGoal']],
+            ['衣着', 'archive-dynamic', ['衣着', '穿着', '服装', 'clothing', 'outfit']],
+            ['发型', 'archive-dynamic', ['发型', 'hairstyle', 'hair']],
+            ['攻略建议', 'archive', ['攻略建议', '攻略方向', '互动建议', '攻略提示', '攻略思路', '攻略策略', '攻略建议与提示', '攻略技巧']]
         ];
+        const relationship = getMvuField(['与主角的关系', '与主角关系', 'relationship']);
+        const currentGoal = getMvuField(['当前目标', 'currentGoal']);
+        const linkedTask = getMvuField(['关联任务', 'linkedTask', 'boundTask']);
+        const formatGoalProgress = () => {
+            const parts = [];
+            if (currentGoal !== undefined) parts.push(`当前目标：${formatProfileValue(currentGoal)}`);
+            if (linkedTask !== undefined) {
+                const taskText = formatProfileValue(linkedTask);
+                const completed = linkedTask && typeof linkedTask === 'object'
+                    ? (linkedTask.是否完成 ?? linkedTask.completed ?? linkedTask.isCompleted)
+                    : false;
+                parts.push(`攻略任务${completed === true ? '（已完成）' : '（进行中）'}：${taskText}`);
+            }
+            return parts.length ? parts.join('\n') : '未记录';
+        };
+        const values = new Map();
+        for (const [label, source, aliases] of fieldSpecs) {
+            let value;
+            if (source === 'mvu') value = getMvuField(aliases);
+            else if (source === 'goal') value = formatGoalProgress();
+            else value = getArchiveField(aliases, { dynamicFirst: source === 'archive-dynamic' });
+
+            // MVU关系字段同时包含路线/阶段时，直接抽取已记录的阶段作为攻略进度，不额外推断。
+            if (label === '攻略进度' && value === undefined && relationship !== undefined) {
+                const relationText = formatProfileValue(relationship);
+                const segments = relationText.split(/[｜|]/).map(part => part.trim()).filter(Boolean);
+                if (segments.length >= 2) value = segments[1];
+            }
+            if (label === '攻略建议' && value === undefined) {
+                value = '结合对方当前目标与关系阶段自然互动，先了解其明确表达的偏好并尊重边界；数值变化不代表同意。';
+            }
+            values.set(label, formatProfileValue(value));
+        }
+        const sectionSpecs = [
+            { title: '基础资料', labels: ['年龄', '国籍', '职业/身份', '学校', '校花榜排名', '性格', '隐藏特质', '颜值'] },
+            { title: '外形与背景', labels: ['身高', '罩杯', '外貌', '背景', '衣着', '发型'] },
+            { title: '关系与攻略', labels: ['固定喜好', '与主角关系', '恋爱状态', '好感度', '攻略进度', '当前目标与进度', '当前状态', '短期目标', '长期目标', '攻略建议'] }
+        ];
+        const details = fieldSpecs.map(([label]) => ({ label, value: values.get(label) || '未记录' }));
         return {
             roleName: formalName,
-            details: fields.map(([label, aliases]) => {
-                const value = getMvuField(aliases);
-                return { label, value: value === undefined ? '未记录' : formatProfileValue(value) };
-            })
+            details,
+            sections: sectionSpecs.map(section => ({
+                title: section.title,
+                details: section.labels.map(label => ({ label, value: values.get(label) || '未记录' }))
+            }))
         };
     }
-
     _getPendingChatIdsOrdered(preferredChatId = null, includePullToRefreshPending = false) {
         const preferred = String(preferredChatId || '').trim();
         const ids = Array.from(this.pendingChatIds || [])
@@ -1791,7 +1857,7 @@ export class ChatView {
             memberProfiles.push([
                 `【${contact.name || memberName}】`,
                 ...(syncedProfile.details || []).map(field => `${field.label}：${String(field.value || '未记录').slice(0, 500)}`),
-                '以上是该成员最新的 MVU 状态。回复时按好感、欲望、堕落、与主角的关系、关系经历、当前目标及关联任务参考；不得编造未记录值，也不要在普通聊天中逐项复述。',
+                '以上包含该成员的角色档案和最新 MVU 状态。回复时参考性格、关系、好感度、攻略进度、目标、当前状态与攻略建议；缺失资料不得编造，也不要在普通聊天中逐项复述。',
                 supplementalSetting ? `补充微信设定：${supplementalSetting}` : ''
             ].filter(Boolean).join('\n'));
         }
@@ -12205,7 +12271,7 @@ renderChatRoom(chat) {
                     `【当前聊天对象档案】`,
                     `联系人：${currentContact.name || targetChat?.name || charName}`,
                     ...(syncedProfile.details || []).map(field => `${field.label}：${field.value || '未记录'}`),
-                    '以上是该联系人的最新 MVU 状态。回复时参考好感度、欲望值、堕落值、与主角的关系、关系经历、当前目标和关联任务；不得编造未记录值，也不要在普通聊天中逐项复述。'
+                    '以上包含该联系人的角色档案和最新 MVU 状态。回复时参考性格、关系、好感度、攻略进度、目标、当前状态与攻略建议；缺失资料不得编造，也不要在普通聊天中逐项复述。'
                 ];
 
                 const supplementalSetting = this._getWechatSupplementalSetting(currentContact);
