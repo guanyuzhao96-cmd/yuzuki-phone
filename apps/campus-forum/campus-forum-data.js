@@ -4,11 +4,12 @@ export const CAMPUS_FORUM_APP_KEY = 'campus_forum';
 export const CAMPUS_FORUM_PUBLIC_SECTIONS = ['恋爱八卦', '校园女神', '偶遇目击', '表白寻人', '匿名树洞'];
 const GENERATED_FEED_KEY = 'campus_forum_generated_feed';
 const FORUM_SYSTEM_PROMPT = `你是校园论坛内容生成器。严格遵守以下规则，只返回一个 JSON 对象，不要解释、不要 Markdown。回复的第一个字符必须是 {，最后一个字符必须是 }：
-1. 公开板块固定为：${CAMPUS_FORUM_PUBLIC_SECTIONS.join('、')}。每个公开板块准确生成 3 条帖子（符合 3–5 条要求）；每帖只写 1 条简短评论。只有暗线权限已解锁时，才可额外生成“暗线”帖子。
+1. 公开板块固定为：${CAMPUS_FORUM_PUBLIC_SECTIONS.join('、')}。每个公开板块生成 1 条帖子；只有确有近期热点或明显不同的讨论角度时才增加第 2 条。每栏最多 2 条，全页最多 12 条。只有暗线权限已解锁时，才可额外生成“暗线”帖子。
 2. 帖子只围绕给定剧情时间线和校园恋爱话题。不得补写主角行为、确认角色关系、编造时间线热点或把旧事写成刚发生。
 3. 事件发生不代表公众知情。公开热点或公开帖子只能采用“公开场合目击、本人公开发布、或剧情明确出现传播”的内容，并写出传播/目击依据。私下关系、秘密、未公开信息和读心结果不得进入公开板块。
 4. 帖子日期必须是当前剧情日期或之前五个剧情日内的有效日期，不得晚于当前剧情日期。热点最多 6 条，只能从编号时间线候选事件中选择；每条热点必须带 source_event_index 和公开依据。没有合格热点时返回空数组。
-5. 只返回如下结构：{"帖子":[{"板块":"恋爱八卦","标题":"","作者":"","日期":"YYYY-MM-DD","正文":"","评论":[{"作者":"","内容":""}]}],"热点":[{"source_event_index":1,"日期":"YYYY-MM-DD","事件":"","依据":"","热度":"低|中|高"}]}`;
+5. 每帖必须有唯一帖子ID、发帖用户ID、作者昵称；每帖生成 2–3 条评论，最多 4 条。每条评论必须有唯一评论ID、用户ID、昵称、日期、内容；同帖评论用户ID互不相同且不同于发帖用户ID。角色跨帖出现时沿用同一用户ID和昵称；普通学生使用稳定的 forum_u_数字 ID。评论体现不同立场或信息视角，不得重复换名或泄露私情。
+6. 只返回如下结构：{"帖子":[{"帖子ID":"post_20250901_love_01","板块":"恋爱八卦","用户ID":"forum_u_zhouyh","作者":"韵涵同学","日期":"YYYY-MM-DD","标题":"","正文":"","评论":[{"评论ID":"post_20250901_love_01_c01","用户ID":"forum_u_014","昵称":"橘子汽水","日期":"YYYY-MM-DD","内容":""}]}],"热点":[{"source_event_index":1,"日期":"YYYY-MM-DD","事件":"","依据":"","热度":"低|中|高"}]}`;
 
 const PRIVATE_EVENT_PATTERN = /私密|私下|秘密|保密|隐瞒|未公开|卧室|床上|私聊|读心|偷拍|胁迫|被迫|暗中|单独约会|秘密关系|性关系|性行为|裸露/;
 const PUBLIC_EVENT_LEAK_PATTERN = /秘密关系|私下.{0,4}(?:关系|约会|见面|交往|接触|行为)|未公开(?:的)?(?:关系|身份|事件|信息)|卧室|床上|读心(?:到|结果|内容)|(?:偷拍到|偷拍视频)|胁迫|被迫发生|性关系|性行为|裸露|裸照/;
@@ -114,6 +115,46 @@ function safeText(value, maxLength = 600) {
     return String(value ?? '').trim().slice(0, maxLength);
 }
 
+function stableForumUserId(value = '') {
+    const source = safeText(value, 100).toLowerCase();
+    if (/^[a-z][a-z0-9_-]{2,48}$/.test(source)) return source;
+    let hash = 2166136261;
+    for (const char of source || 'anonymous') {
+        hash ^= char.codePointAt(0);
+        hash = Math.imul(hash, 16777619);
+    }
+    return `forum_u_${(hash >>> 0).toString(36)}`;
+}
+
+function resolveForumAccount(rawId, nickname, registry) {
+    const displayName = safeText(nickname, 40) || '匿名同学';
+    const nameKey = displayName.toLowerCase();
+    if (registry.byName.has(nameKey)) return registry.byName.get(nameKey);
+    const userId = stableForumUserId(rawId || displayName);
+    if (registry.byId.has(userId)) {
+        const account = registry.byId.get(userId);
+        registry.byName.set(nameKey, account);
+        return account;
+    }
+    const account = { userId, nickname: displayName };
+    registry.byName.set(nameKey, account);
+    registry.byId.set(userId, account);
+    return account;
+}
+
+function uniqueId(value, fallback, usedIds) {
+    const base = safeText(value, 100) || fallback;
+    let candidate = base;
+    let suffix = 2;
+    while (usedIds.has(candidate)) candidate = `${base}_${suffix++}`;
+    usedIds.add(candidate);
+    return candidate;
+}
+
+function forumSectionCode(section = '') {
+    return ({ 恋爱八卦: 'love', 校园女神: 'goddess', 偶遇目击: 'sighting', 表白寻人: 'confession', 匿名树洞: 'treehole', 暗线: 'hidden' })[section] || 'post';
+}
+
 function responseToText(value) {
     if (typeof value === 'string') return value;
     if (Array.isArray(value)) {
@@ -129,24 +170,43 @@ function responseToText(value) {
     return String(value ?? '');
 }
 
-function normalizePost(post = {}, sectionName = '', fallbackDate = '') {
+function normalizePost(post = {}, sectionName = '', fallbackDate = '', postIndex = 0, usedPostIds = new Set(), usedCommentIds = new Set(), identityRegistry = { byName: new Map(), byId: new Map() }) {
     const title = safeText(post.title || post.标题, 80);
-    const author = safeText(post.author || post.作者 || post.发帖人, 40) || '匿名同学';
+    const authorInput = safeText(post.author || post.作者 || post.发帖人, 40) || '匿名同学';
     const content = safeText(post.content || post.body || post.正文 || post.内容, 600);
     if (!title || !content) return null;
+    const date = getDateText(post.date || post.日期 || post.发布时间 || post.publishTime) || getDateText(fallbackDate);
+    const postDateCode = date.replace(/-/g, '') || 'undated';
+    const postId = uniqueId(post.postId || post.post_id || post.帖子ID || post.id,
+        `post_${postDateCode}_${forumSectionCode(sectionName)}_${String(postIndex + 1).padStart(2, '0')}`, usedPostIds);
+    const authorAccount = resolveForumAccount(post.userId || post.user_id || post.用户ID || post.用户Id || post.用户id, authorInput, identityRegistry);
+    const userId = authorAccount.userId;
     const commentsRaw = Array.isArray(post.comments) ? post.comments : (Array.isArray(post.评论) ? post.评论 : []);
-    const comments = commentsRaw.slice(0, 4).map(comment => typeof comment === 'string'
-        ? { author: '路过同学', content: safeText(comment, 300) }
-        : {
-            author: safeText(comment?.author || comment?.作者, 40) || '路过同学',
-            content: safeText(comment?.content || comment?.内容, 300)
-        }).filter(comment => comment.content);
-    if (!comments.length) comments.push({ author: '路过同学', content: '蹲后续，感谢分享。' });
+    const usedCommentUserIds = new Set([userId]);
+    const comments = commentsRaw.slice(0, 4).map((comment, index) => {
+        const raw = typeof comment === 'string' ? { 内容: comment } : (comment || {});
+        const nicknameInput = safeText(raw.nickname || raw.昵称 || raw.author || raw.作者, 40) || '路过同学';
+        const commentContent = safeText(raw.content || raw.内容, 300);
+        if (!commentContent) return null;
+        const commenterAccount = resolveForumAccount(raw.userId || raw.user_id || raw.用户ID || raw.用户Id || raw.用户id, nicknameInput, identityRegistry);
+        const commenterId = uniqueId(commenterAccount.userId, stableForumUserId(`${nicknameInput}-${index + 1}`), usedCommentUserIds);
+        const commentId = uniqueId(raw.commentId || raw.comment_id || raw.评论ID || raw.评论Id || raw.id,
+            `${postId}_c${String(index + 1).padStart(2, '0')}`, usedCommentIds);
+        return {
+            id: commentId,
+            userId: commenterId,
+            author: commenterAccount.nickname,
+            date: getDateText(raw.date || raw.日期 || raw.发布时间) || date,
+            content: commentContent
+        };
+    }).filter(Boolean);
     return {
+        id: postId,
         section: sectionName,
+        userId,
         title,
-        author,
-        date: getDateText(post.date || post.日期 || post.发布时间 || post.publishTime) || getDateText(fallbackDate),
+        author: authorAccount.nickname,
+        date,
         content,
         comments
     };
@@ -191,6 +251,7 @@ export class CampusForumData {
         this.worldbookManager = window.VirtualPhone?.worldbookManager;
         this._feed = null;
         this._generatedFeed = this._readGeneratedFeed();
+        this._preferGeneratedFeed = false;
         this._generatePromise = null;
         this._lastAIResponse = '';
         this._books = [];
@@ -199,7 +260,7 @@ export class CampusForumData {
 
     getFeed() {
         const currentStoryDate = getStoryDate()?.iso || '';
-        if (this._generatedFeed && this._generatedFeed.storyDate === currentStoryDate) {
+        if (this._preferGeneratedFeed && this._generatedFeed && this._generatedFeed.storyDate === currentStoryDate) {
             this._feed = this._generatedFeed;
             return this._feed;
         }
@@ -207,25 +268,80 @@ export class CampusForumData {
         const { snapshot, forum, hiddenUnlocked } = extractMvuForumState(context);
         const data = snapshot?.data || {};
         const rawPosts = Array.isArray(data.forum_view) ? data.forum_view : [];
-        if (!snapshot || !rawPosts.length) { this._feed = null; return null; }
-        const sections = hiddenUnlocked ? [...CAMPUS_FORUM_PUBLIC_SECTIONS, '暗线'] : CAMPUS_FORUM_PUBLIC_SECTIONS;
-        const postsBySection = Object.fromEntries(sections.map(section => [section, []]));
-        const storyDate = safeText(data.scene?.date || data.scene?.日期, 32);
-        for (const post of rawPosts) {
-            const section = safeText(post?.板块 || post?.section, 24);
-            if (!postsBySection[section] || postsBySection[section].length >= 5) continue;
-            const normalized = normalizePost(post, section, storyDate);
-            if (normalized) postsBySection[section].push(normalized);
+        if (snapshot && rawPosts.length) {
+            const sections = hiddenUnlocked ? [...CAMPUS_FORUM_PUBLIC_SECTIONS, '暗线'] : CAMPUS_FORUM_PUBLIC_SECTIONS;
+            const postsBySection = Object.fromEntries(sections.map(section => [section, []]));
+            const storyDate = safeText(data.scene?.date || data.scene?.日期, 32) || currentStoryDate;
+            const storyDateParts = normalizeDateParts(storyDate);
+            const usedPostIds = new Set();
+            const usedCommentIds = new Set();
+            const identityRegistry = { byName: new Map(), byId: new Map() };
+            rawPosts.forEach((post, index) => {
+                const section = safeText(post?.板块 || post?.section, 24);
+                if (!postsBySection[section] || postsBySection[section].length >= 2
+                    || Object.values(postsBySection).reduce((total, entries) => total + entries.length, 0) >= 12) return;
+                const normalized = normalizePost(post, section, storyDate, index, usedPostIds, usedCommentIds, identityRegistry);
+                if (!normalized) return;
+                const postDate = normalizeDateParts(normalized.date);
+                if (storyDateParts && postDate) {
+                    const age = daysBetween(storyDateParts.date, postDate.date);
+                    if (postDate.date > storyDateParts.date || age > 4) return;
+                }
+                if (section !== '暗线' && PUBLIC_EVENT_LEAK_PATTERN.test(`${normalized.title}\n${normalized.content}\n${normalized.comments.map(item => item.content).join('\n')}`)) return;
+                postsBySection[section].push(normalized);
+            });
+            Object.values(postsBySection).forEach(entries => entries.sort((a, b) => b.date.localeCompare(a.date)));
+            const hotspots = (Array.isArray(forum.hotspots) ? forum.hotspots : Array.isArray(forum.热点) ? forum.热点 : [])
+                .filter(item => !(item?.隐藏 === true || item?.hidden === true) || hiddenUnlocked)
+                .map(item => {
+                    const date = getDateText(item?.日期 || item?.date);
+                    const parsed = normalizeDateParts(date);
+                    if (storyDateParts && parsed) {
+                        const age = daysBetween(storyDateParts.date, parsed.date);
+                        if (parsed.date > storyDateParts.date || age > 4) return null;
+                    }
+                    return {
+                        date,
+                        event: safeText(item?.事件 || item?.event, 300),
+                        basis: safeText(item?.依据 || item?.basis, 240),
+                        heat: ['低', '中', '高'].includes(String(item?.热度 || item?.heat || '')) ? String(item?.热度 || item?.heat) : '低'
+                    };
+                }).filter(item => item?.event).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 6);
+            this._feed = { storyDate, sections, postsBySection, hotspots, sourceBooks: this.getSelectedBooks().map(book => book.name), fromMvu: true };
+            return this._feed;
         }
-        const hotspots = (Array.isArray(forum.hotspots) ? forum.hotspots : Array.isArray(forum.热点) ? forum.热点 : [])
-            .slice(0, 6).map(item => ({
-                date: getDateText(item?.日期 || item?.date),
-                event: safeText(item?.事件 || item?.event, 300),
-                basis: safeText(item?.依据 || item?.basis, 240),
-                heat: ['低', '中', '高'].includes(String(item?.热度 || item?.heat || '')) ? String(item?.热度 || item?.heat) : '低'
-            })).filter(item => item.event);
-        this._feed = { storyDate, sections, postsBySection, hotspots, sourceBooks: this.getSelectedBooks().map(book => book.name), fromMvu: true };
-        return this._feed;
+        if (this._generatedFeed && this._generatedFeed.storyDate === currentStoryDate) {
+            const sections = hiddenUnlocked ? [...CAMPUS_FORUM_PUBLIC_SECTIONS, '暗线'] : CAMPUS_FORUM_PUBLIC_SECTIONS;
+            const postsBySection = Object.fromEntries(sections.map(section => [section, []]));
+            const usedPostIds = new Set();
+            const usedCommentIds = new Set();
+            const identityRegistry = { byName: new Map(), byId: new Map() };
+            let total = 0;
+            for (const section of sections) {
+                const sourcePosts = this._generatedFeed.postsBySection?.[section] || [];
+                sourcePosts.forEach((rawPost, index) => {
+                    if (postsBySection[section].length >= 2 || total >= 12) return;
+                    const post = normalizePost(rawPost, section, currentStoryDate, index, usedPostIds, usedCommentIds, identityRegistry);
+                    if (!post || (section !== '暗线' && PUBLIC_EVENT_LEAK_PATTERN.test(`${post.title}\n${post.content}\n${post.comments.map(item => item.content).join('\n')}`))) return;
+                    const parsedDate = normalizeDateParts(post.date);
+                    const currentDate = normalizeDateParts(currentStoryDate);
+                    if (!parsedDate || !currentDate || parsedDate.date > currentDate.date || daysBetween(currentDate.date, parsedDate.date) > 4) return;
+                    postsBySection[section].push(post);
+                    total += 1;
+                });
+                postsBySection[section].sort((a, b) => b.date.localeCompare(a.date));
+            }
+            this._generatedFeed = {
+                ...this._generatedFeed,
+                sections,
+                postsBySection,
+                hotspots: (this._generatedFeed.hotspots || []).filter(item => !item.hidden && !item.隐藏).slice(0, 6)
+            };
+            this._feed = this._generatedFeed;
+            return this._feed;
+        }
+        this._feed = null;
+        return null;
     }
 
     _readGeneratedFeed() {
@@ -350,15 +466,14 @@ export class CampusForumData {
         let parsed = null;
         let parseError = null;
         let rawText = '';
-        // Five public boards can produce 15–25 posts (plus an optional hidden
-        // board). A 4k-token floor is often too small and encourages truncated
-        // or explanatory responses, so leave room for the complete JSON.
+        // Five public boards can produce up to 12 posts (plus an optional hidden
+        // board). Leave room for distinct comments and stable account IDs.
         const outputTokenLimit = Math.max(8000, configuredMaxTokens);
         for (let attempt = 0; attempt < 2; attempt += 1) {
             const controller = typeof AbortController === 'function' ? new AbortController() : null;
             const timeout = setTimeout(() => controller?.abort(), 240000);
             let response;
-            const retryInstruction = attempt === 0 ? '' : '\n\n上一次回复未通过 JSON 或栏目完整性校验。请重新生成完整结果，不要解释、不要 Markdown、不要代码围栏；只输出一个以 { 开始、以 } 结束的 JSON 对象，字段必须为“帖子”和“热点”。所有请求栏目都必须各有 3 条帖子。';
+            const retryInstruction = attempt === 0 ? '' : '\n\n上一次回复未通过 JSON 或论坛规则校验。请重新生成完整结果，不要解释、不要 Markdown、不要代码围栏；只输出一个以 { 开始、以 } 结束的 JSON 对象。每个请求栏目至少 1 帖、最多 2 帖，全页最多 12 帖；每帖必须有至少 2 条评论及帖子ID、用户ID、评论ID、昵称和日期。';
             try {
                 response = await apiManager.callAI([
                     { role: 'system', name: 'SYSTEM (校园论坛规则)', content: FORUM_SYSTEM_PROMPT, isPhoneMessage: true },
@@ -388,12 +503,23 @@ export class CampusForumData {
                 const candidatePosts = normalizePostCollection(candidatePostValue, sections);
                 if (!Array.isArray(candidatePosts)) throw new Error('论坛生成结果缺少帖子列表');
                 const sectionCounts = Object.fromEntries(sections.map(section => [section, 0]));
+                let commentCountError = false;
                 candidatePosts.forEach(post => {
                     const section = safeText(post?.板块 || post?.section || post?.栏目 || post?.category, 24);
                     if (Object.prototype.hasOwnProperty.call(sectionCounts, section)) sectionCounts[section] += 1;
+                    const comments = post?.评论 || post?.comments;
+                    if (!Array.isArray(comments) || comments.length < 2) commentCountError = true;
                 });
-                const missing = sections.filter(section => sectionCounts[section] < 3);
-                if (missing.length) throw new Error(`论坛 JSON 栏目不完整：${missing.join('、')}`);
+                const missing = CAMPUS_FORUM_PUBLIC_SECTIONS.filter(section => sectionCounts[section] < 1);
+                const oversized = sections.filter(section => sectionCounts[section] > 2);
+                const total = Object.values(sectionCounts).reduce((sum, count) => sum + count, 0);
+                if (missing.length || oversized.length || total > 12 || commentCountError) {
+                    const problems = [];
+                    if (missing.length) problems.push(`缺少栏目：${missing.join('、')}`);
+                    if (oversized.length || total > 12) problems.push('帖子超过每栏2条或全页12条上限');
+                    if (commentCountError) problems.push('每帖至少需要2条评论');
+                    throw new Error(`论坛 JSON 不符合规则：${problems.join('；')}`);
+                }
                 parsed = candidate;
                 break;
             } catch (error) {
@@ -409,18 +535,23 @@ export class CampusForumData {
         const rawPosts = normalizePostCollection(rawPostValue, sections);
         if (!Array.isArray(rawPosts)) throw new Error('论坛生成结果缺少帖子列表');
         const postsBySection = Object.fromEntries(sections.map(section => [section, []]));
+        const usedPostIds = new Set();
+        const usedCommentIds = new Set();
+        const identityRegistry = { byName: new Map(), byId: new Map() };
+        let visiblePostCount = 0;
         rawPosts.slice(0, 35).forEach(rawPost => {
             const section = safeText(rawPost?.板块 || rawPost?.section || rawPost?.栏目 || rawPost?.category, 24);
-            if (!postsBySection[section] || postsBySection[section].length >= 5) return;
-            const post = normalizePost(rawPost, section, storyDate);
+            if (!postsBySection[section] || postsBySection[section].length >= 2 || visiblePostCount >= 12) return;
+            const post = normalizePost(rawPost, section, storyDate, visiblePostCount, usedPostIds, usedCommentIds, identityRegistry);
             if (!post || (section !== '暗线' && PUBLIC_EVENT_LEAK_PATTERN.test(`${post.title}\n${post.content}\n${post.comments.map(item => item.content).join('\n')}`))) return;
             const parsedDate = normalizeDateParts(post.date);
             const age = parsedDate && normalizeDateParts(storyDate) ? daysBetween(normalizeDateParts(storyDate).date, parsedDate.date) : 0;
             if (!parsedDate || parsedDate.iso > storyDate || age > 4) return;
             postsBySection[section].push(post);
+            visiblePostCount += 1;
         });
-        const missingSections = sections.filter(section => postsBySection[section].length < 3);
-        if (missingSections.length) throw new Error(`以下栏目未生成足够的有效帖子（每栏至少 3 条）：${missingSections.join('、')}，请重试`);
+        const missingSections = CAMPUS_FORUM_PUBLIC_SECTIONS.filter(section => postsBySection[section].length < 1);
+        if (missingSections.length) throw new Error(`以下栏目未生成有效帖子（每栏至少 1 条）：${missingSections.join('、')}，请重试`);
         const rawHotspots = payload?.热点 || payload?.hotspots || [];
         const hotspots = (Array.isArray(rawHotspots) ? rawHotspots : []).slice(0, 6).map(item => {
             const sourceIndex = Number(item?.source_event_index ?? item?.来源事件序号) - 1;
@@ -446,6 +577,7 @@ export class CampusForumData {
         };
         this._generatedFeed = feed;
         this._feed = feed;
+        this._preferGeneratedFeed = true;
         await this.storage?.set?.(GENERATED_FEED_KEY, feed);
         return { feed, selectedBooks: feed.sourceBooks, storyDate };
     }
