@@ -10,7 +10,7 @@
  * Copyright (c) yuzuki. All rights reserved.
  * ======================================================== */
 // 手机外壳
-import { PHONE_CONFIG } from '../config/apps.js?v=1.6.9';
+import { PHONE_CONFIG } from '../config/apps.js?v=1.6.15';
 
 export class PhoneShell {
     constructor() {
