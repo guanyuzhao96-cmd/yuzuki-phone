@@ -1407,18 +1407,16 @@ export class ContactsView {
             const name = this._escapeHtml(contact.name || '联系人');
             const remark = String(contact.remark || '').trim();
             const avatar = this.app.renderAvatar(contact.avatar, '👤', contact.name || '联系人');
+            const fallbackDetails = [
+                ['年龄', '国籍', '职业/身份', '学校', '校花榜排名', '性格', '隐藏特质', '颜值'],
+                ['身高', '罩杯', '外貌', '背景', '衣着', '发型'],
+                ['固定喜好', '与主角关系', '恋爱状态', '好感度', '攻略进度', '当前目标与进度', '当前状态', '短期目标', '长期目标', '攻略建议']
+            ];
             const info = profile || {
-                details: [
-                    { label: '好感度', value: '未记录' },
-                    { label: '欲望值', value: '未记录' },
-                    { label: '堕落值', value: '未记录' },
-                    { label: '与主角的关系', value: '未记录' },
-                    { label: '与主角发生过关系', value: '未记录' },
-                    { label: '性经历人数', value: '未记录' },
-                    { label: '性经历人员', value: '未记录' },
-                    { label: '当前目标', value: '未记录' },
-                    { label: '关联任务', value: '未记录' }
-                ]
+                sections: ['基础资料', '外形与背景', '关系与攻略'].map((title, index) => ({
+                    title,
+                    details: fallbackDetails[index].map(label => ({ label, value: '未记录' }))
+                }))
             };
             const details = Array.isArray(info.details) ? info.details : [];
             const row = (label, value) => `
@@ -1446,9 +1444,12 @@ export class ContactsView {
                                 ${remark ? `<div style="margin-top:4px; font-size:12px; color:#8e8e93;">备注：${this._escapeHtml(remark)}</div>` : ''}
                             </div>
                         </div>
-                        <div style="overflow:hidden; background:#fff; border-radius:14px;">
-                            ${details.map(field => row(field.label, loading ? '读取中…' : field.value)).join('')}
-                        </div>
+                        ${(Array.isArray(info.sections) ? info.sections : [{ title: '角色档案', details }]).map(section => `
+                            <section style="overflow:hidden; margin-bottom:12px; background:#fff; border-radius:14px;">
+                                <div style="padding:12px 14px 7px; color:#07a653; font-size:13px; font-weight:650;">${this._escapeHtml(section.title || '角色档案')}</div>
+                                ${(Array.isArray(section.details) ? section.details : []).map(field => row(this._escapeHtml(field.label), loading ? '读取中…' : field.value)).join('')}
+                            </section>
+                        `).join('')}
                         <button id="contact-profile-message" type="button" style="display:block; width:100%; min-height:46px; margin-top:16px; border:0; border-radius:12px; background:#07c160; color:#fff; font-size:16px; font-weight:600;">
                             发消息
                         </button>
