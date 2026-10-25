@@ -22,6 +22,7 @@ globalThis.window = {
 };
 
 const { CampusForumData, CAMPUS_FORUM_PUBLIC_SECTIONS } = await import('../apps/campus-forum/campus-forum-data.js');
+const { CampusForumView } = await import('../apps/campus-forum/campus-forum-view.js');
 
 test('读取所选世界书时间线，并在非 JSON 首答后重试、生成并保存完整栏目', async () => {
     const saved = new Map();
@@ -63,4 +64,40 @@ test('读取所选世界书时间线，并在非 JSON 首答后重试、生成�
     }
     assert.equal(result.feed.hotspots.length, 1);
     assert.ok(saved.has('campus_forum_generated_feed'), '完整论坛结果应保存到当前会话存储');
+});
+
+test('生成失败时保留完整 AI 原文，并可下载为 txt 文件', async () => {
+    const saved = new Map();
+    const storage = {
+        get(key, fallback) { return saved.has(key) ? saved.get(key) : fallback; },
+        set(key, value) { saved.set(key, value); }
+    };
+    const originalReply = '模型原始回复：\n```json\n{"论坛内容":{"分区帖子":[]}}\n```\n结尾原文';
+    window.VirtualPhone.apiManager = {
+        async callAI() { return { success: true, summary: originalReply }; }
+    };
+    const data = new CampusForumData(storage);
+    await assert.rejects(data.generateFeed(), /论坛生成结果缺少帖子列表/);
+    assert.equal(data.getLastAIResponse(), originalReply, '失败后应完整保留最后一次 AI 回复');
+
+    const anchor = { style: {}, click() { this.clicked = true; }, remove() { this.removed = true; } };
+    const originalDocument = globalThis.document;
+    let downloadedBlob = null;
+    window.URL = { createObjectURL(blob) { downloadedBlob = blob; return 'blob:test-ai-reply'; }, revokeObjectURL() {} };
+    globalThis.document = {
+        createElement(tag) { assert.equal(tag, 'a'); return anchor; },
+        body: { appendChild(node) { assert.equal(node, anchor); } }
+    };
+    try {
+        const view = new CampusForumView({});
+        view._failedResponse = data.getLastAIResponse();
+        assert.equal(view.downloadFailedResponse(), true);
+        assert.equal(anchor.clicked, true);
+        assert.equal(anchor.removed, true);
+        assert.match(anchor.download, /^校园论坛-AI原始回复-.*\.txt$/);
+        assert.equal(await downloadedBlob.text(), originalReply, '下载文件应保留 AI 原文，不截断、不改写');
+    } finally {
+        globalThis.document = originalDocument;
+        delete window.URL;
+    }
 });
