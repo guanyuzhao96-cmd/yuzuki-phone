@@ -38,7 +38,7 @@ import {
 } from './apps/mofo/mofo-renderer.js';
 
 const ST_PHONE_BASE_URL = new URL('./', import.meta.url).href;
-const ST_PHONE_VERSION = '1.6.23';
+const ST_PHONE_VERSION = '1.6.24';
 const ST_PHONE_CSS_REVISION = '20261020-ios-complete-theme-v3';
 const ST_PHONE_APP_SWIPE_REVISION = '20261002-wechat-chat-return';
 const ST_PHONE_ALBUM_MODULE_REVISION = '20261006-story-image-outside-close';
@@ -149,6 +149,7 @@ const ST_PHONE_CURRENT_UPDATE = {
     version: ST_PHONE_VERSION,
     date: '2026-10-25',
     items: [
+        '【档案】角色档案列表仅显示存在有效动态资料字段的角色，过滤只有目录名或静态资料的条目。',
         '【修复】补齐公告数组遗漏的逗号，修复插件脚本无法解析；入口恢复为扩展菜单启动。',
         '【论坛】刷新论坛改为插件页内直接调用 API 生成并展示帖子与热点，结果按当前聊天保存，不再要求发送聊天请求。',
         '【修复】更新检查改为读取 guanyuzhao96-cmd 的 feat/read-only-character-dossier 分支，避免误查旧上游版本。',
