@@ -174,3 +174,47 @@ test('点击帖子卡片后进入可滚动详情并显示评论', () => {
         globalThis.document = originalDocument;
     }
 });
+
+test('论坛只自动生成最多两张必要配图，并通过插件图片管理器保存', async () => {
+    const saved = new Map();
+    const storage = {
+        get(key, fallback) { return saved.has(key) ? saved.get(key) : fallback; },
+        set(key, value) { saved.set(key, value); }
+    };
+    const calls = [];
+    const previousImageGenerationManager = window.VirtualPhone.imageGenerationManager;
+    const previousImageManager = window.VirtualPhone.imageManager;
+    window.VirtualPhone.imageGenerationManager = {
+        async generate(options) {
+            calls.push(options);
+            return { imageData: 'data:image/png;base64,AA==', provider: 'mock-provider', model: 'mock-model' };
+        }
+    };
+    window.VirtualPhone.imageManager = {
+        async uploadDataUrl(_dataUrl, prefix) { return `/backgrounds/${prefix}-${calls.length}.png`; }
+    };
+    try {
+        const feed = {
+            storyDate: '2025-09-01',
+            fromMvu: false,
+            postsBySection: {
+                校园女神: Array.from({ length: 3 }, (_, index) => ({
+                    section: '校园女神', title: `公开活动${index + 1}`, content: '活动现场照片',
+                    imagePrompt: `public campus event ${index + 1}`, imageStatus: 'pending', imageUrl: ''
+                }))
+            }
+        };
+        const data = new CampusForumData(storage);
+        await data.generateNecessaryImages(feed);
+        assert.equal(calls.length, 2, '每批最多自动生成两张必要配图');
+        assert.ok(calls.every(call => call.app === 'x'), '应复用 X 模块绑定的图片生成配置');
+        assert.equal(feed.postsBySection.校园女神[0].imageStatus, 'done');
+        assert.equal(feed.postsBySection.校园女神[1].imageStatus, 'done');
+        assert.equal(feed.postsBySection.校园女神[2].imageStatus, 'pending', '超出上限的配图不应自动调用');
+        assert.match(feed.postsBySection.校园女神[0].imageUrl, /^\/backgrounds\//);
+        assert.ok(saved.has('campus_forum_generated_feed'), '配图状态应与帖子结果一同保存');
+    } finally {
+        window.VirtualPhone.imageGenerationManager = previousImageGenerationManager;
+        window.VirtualPhone.imageManager = previousImageManager;
+    }
+});
