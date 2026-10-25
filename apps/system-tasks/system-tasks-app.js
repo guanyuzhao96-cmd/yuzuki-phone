@@ -1,5 +1,5 @@
 import { WorldbookManager } from '../../config/worldbook-manager.js';
-import { clean, escapeHtml, latestMvuSnapshot, parseFields } from '../dossier/dossier-data.js';
+import { clean, escapeHtml, findMvuRole, latestMvuSnapshot, parseFields } from '../dossier/dossier-data.js';
 
 const css = `
 .yzp-system-tasks{height:100%;min-height:0;display:flex;flex-direction:column;overflow:hidden;background:#f2f2f7;color:#1c1c1e;font:14px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",sans-serif}
@@ -45,18 +45,62 @@ function parseLocalDirectories(books) {
 }
 
 function sourceFor(entries, name, type, dynamicComment) {
-    // Dossier lookup is a catalog read, not worldbook prompt activation. Keep
-    // entries that have content even when the worldbook/entry is not active.
     const candidates = entryList({ entries }).filter(entry => String(entry.content || '').trim());
     if (type === 'dynamic') {
         const preferred = candidates.filter(entry => clean(entry.comment) === dynamicComment);
         if (preferred.length) return preferred;
-        return candidates.filter(entry => clean(entry.comment) === `动态-${name}` || /^\[--角色档案开始--\]/.test(entry.content || '')
+        return candidates.filter(entry => clean(entry.comment) === `动态-${name}` || /^\\[--角色档案开始--\\]/.test(entry.content || '')
             && parseFields(entry.content).some(field => field.label === '姓名' && clean(field.value) === name));
     }
     return candidates.filter(entry => clean(entry.comment) === name
         || parseFields(entry.content).some(field => field.label === '姓名' && clean(field.value) === name)
-            && !/^动态-/.test(entry.comment || '') && !/^\[--角色档案开始--\]/.test(entry.content || ''));
+            && !/^动态-/.test(entry.comment || '') && !/^\\[--角色档案开始--\\]/.test(entry.content || ''));
+}
+
+function flattenEntries(books) {
+    return (books || []).flatMap(book => entryList(book).map(entry => ({
+        ...entry,
+        book: book.name,
+        bookName: book.name
+    })));
+}
+
+function namesFromSources(entries, mvuData) {
+    const names = new Set();
+    for (const entry of entries || []) {
+        const comment = clean(entry.comment);
+        if (comment.startsWith('动态-')) names.add(clean(comment.slice(3)));
+        for (const field of parseFields(entry.content)) {
+            if (field.label === '姓名' && clean(field.value)) names.add(clean(field.value));
+        }
+    }
+    const roles = mvuData?.roles;
+    if (roles && typeof roles === 'object' && !Array.isArray(roles)) {
+        for (const [id, role] of Object.entries(roles)) {
+            if (id === '$meta' || !role || typeof role !== 'object' || Array.isArray(role)) continue;
+            const name = clean(role.role_name || id);
+            if (name && name !== '$meta') names.add(name);
+        }
+    }
+    return [...names].filter(Boolean);
+}
+
+function relevantChatContext(chat, name, maxChars = 5000) {
+    const matching = (Array.isArray(chat) ? chat : []).slice(-40).map(message => {
+        const content = String(message?.mes || message?.content || '').trim();
+        if (!content.includes(name)) return null;
+        const speaker = message?.is_user ? '用户' : clean(message?.name || 'AI');
+        return { speaker, content: content.slice(0, 900) };
+    }).filter(Boolean).slice(-8);
+    let remaining = maxChars;
+    const result = [];
+    for (const item of matching.reverse()) {
+        if (remaining <= 0) break;
+        const content = item.content.slice(0, remaining);
+        result.unshift({ speaker: item.speaker, content });
+        remaining -= content.length;
+    }
+    return result;
 }
 
 function taskRows(data) {
@@ -155,45 +199,27 @@ export class SystemTasksApp {
         this.errors = [];
         this.draw();
         try {
-            const defaultNames = await this.manager.getDossierDefaultBooks();
-            // Include every worldbook in SillyTavern's catalog, not only books
-            // attached to or activated for the current chat/card.
+            // Load every available worldbook as a searchable dossier catalog. A CWB
+            // directory can improve mapping, but it is optional and never gates use.
             const availableBooks = await this.manager.fetchAllAvailableWorldBooks();
-            const initialNames = [...new Set([
-                ...defaultNames,
-                ...availableBooks.map(book => book.name).filter(Boolean)
-            ])];
-            const initialResults = await Promise.allSettled(initialNames.map(name => this.manager.readDossierWorldbook(name)));
-            const initialBooks = initialResults.filter(result => result.status === 'fulfilled').map(result => result.value);
-            const directories = [...parseCentralDirectory(initialBooks), ...parseLocalDirectories(initialBooks)];
-            const allNames = [...new Set([...initialNames, ...directories.map(row => row.book).filter(Boolean)])];
-            const extraResults = await Promise.allSettled(allNames.filter(name => !initialNames.includes(name)).map(name => this.manager.readDossierWorldbook(name)));
-            const extraBooks = extraResults.filter(result => result.status === 'fulfilled').map(result => result.value);
-            const books = [...initialBooks, ...extraBooks];
+            const results = await Promise.allSettled(availableBooks.map(book => this.manager.readDossierWorldbook(book.name)));
+            const books = results.filter(result => result.status === 'fulfilled').map(result => result.value);
             const ctx = this.context();
             const mvuApi = ctx.Mvu || window.Mvu || window.parent?.Mvu;
             const snapshot = latestMvuSnapshot(typeof mvuApi?.getMvuData === 'function' ? args => mvuApi.getMvuData(args) : null, ctx.chat || []);
             if (token !== this.sequence || scope !== this.scope() || !this.active) return;
             this.books = books;
-            this.errors = [
-                ...initialResults.flatMap((result, index) => result.status === 'rejected' ? [`${initialNames[index]}：${result.reason?.message || '读取失败'}`] : []),
-                ...extraResults.flatMap((result, index) => result.status === 'rejected' ? [`${allNames.filter(name => !initialNames.includes(name))[index]}：${result.reason?.message || '读取失败'}`] : [])
-            ];
-            const bookByName = new Map(books.map(book => [book.name, book]));
-            const unique = new Map();
-            for (const row of directories) {
-                if (!row.name || !row.book) continue;
-                const book = bookByName.get(row.book);
-                const staticSources = sourceFor(book?.entries, row.name, 'static', row.dynamicComment);
-                const dynamicSources = sourceFor(book?.entries, row.name, 'dynamic', row.dynamicComment);
-                const key = JSON.stringify([row.name, row.book, row.dynamicComment]);
-                unique.set(key, { ...row, staticSources, dynamicSources });
-            }
-            // The task picker should only expose characters with a usable dynamic
-            // dossier entry. Directory rows without a live `动态-角色名` source
-            // are not actionable for task generation and should stay out of the list.
-            this.characters = [...unique.values()].filter(row => row.dynamicSources.length > 0);
+            this.entries = flattenEntries(books);
             this.mvu = snapshot;
+            const card = ctx.characters?.[ctx.characterId];
+            this.preferredBooks = [
+                ...(Array.isArray(ctx.chatMetadata?.world_info) ? ctx.chatMetadata.world_info : [ctx.chatMetadata?.world_info]),
+                card?.data?.extensions?.world
+            ].filter(Boolean).map(clean);
+            this.errors = results.flatMap((result, index) => result.status === 'rejected'
+                ? [`${availableBooks[index]?.name || '世界书'}：${result.reason?.message || '读取失败'}`] : []);
+            const names = namesFromSources(this.entries, snapshot?.data);
+            this.characters = names.map(name => this.resolveRole(name)).filter(result => !result.error).map(result => result.role);
             this.tasks = taskRows(snapshot?.data);
             this.readAt = new Date().toLocaleTimeString();
         } catch (error) {
@@ -220,18 +246,17 @@ export class SystemTasksApp {
         const activeTask = (this.tasks || []).length > 0;
         const errors = this.errors.map(error => `<div class="notice">${escapeHtml(error)}</div>`).join('');
         const hasDirectories = (this.books || []).some(book => [...parseCentralDirectory([book]), ...parseLocalDirectories([book])].length > 0);
-        const sourceErrors = this.characters.length ? '' : hasDirectories
-            ? '<div class="notice">目录中没有找到启用且包含内容的动态角色档案（条目名称应为“动态-角色名”）。</div>'
-            : '<div class="notice">未找到角色目录。请确认当前聊天已绑定包含 CWB 角色目录的世界书。</div>';
-        const status = this.loading ? '<small>正在读取世界书目录与最新 MVU…</small>' : `<small>已读取 ${this.books.length} 本关联世界书 · ${this.characters.length} 条含动态资料的角色记录 · ${escapeHtml(this.readAt || '')}</small>`;
+        const sourceErrors = this.characters.length ? ''
+            : '<div class="notice">暂未从当前聊天 MVU 与自动检索到的角色档案中识别出可用角色；仍可输入角色姓名，按“生成”后会再次检索匹配。</div>';
+        const status = this.loading ? '<small>正在读取当前聊天上下文、MVU 与可用角色档案…</small>' : `<small>已扫描 ${this.books.length} 本可用资料 · 识别 ${this.characters.length} 个可用角色 · ${escapeHtml(this.readAt || '')}</small>`;
         this.phoneShell.setContent(`<style>${css}</style><div class="yzp-system-tasks"><header><button type="button" data-action="back" aria-label="返回">‹</button><strong>任务系统</strong><button type="button" class="secondary" data-action="refresh" ${this.loading ? 'disabled' : ''}>刷新</button></header><main>
             ${errors}${this.notice ? `<div class="notice">${escapeHtml(this.notice)}</div>` : ''}
             <h2>当前任务</h2>${taskList}
-            <h2>生成攻略任务</h2><article><p class="muted">输入角色姓名后，模块会从目录定位该角色的静态资料和动态资料，并附上当前 MVU 状态提交给本轮 AI。</p>
+            <h2>生成攻略任务</h2><article><p class="muted">输入角色姓名后，模块会从当前聊天上下文、MVU 和自动检索到的角色档案中取材，不要求绑定世界书或提供 CWB 目录。</p>
             ${sourceErrors}<div class="form"><input id="yzp-task-role-name" list="yzp-task-role-options" placeholder="输入角色正式姓名" autocomplete="off" aria-label="任务目标角色姓名"><datalist id="yzp-task-role-options">${names.map(name => `<option value="${escapeHtml(name)}"></option>`).join('')}</datalist>
-            <button type="button" class="primary" data-action="generate" ${this.sending || this.loading || activeTask || !names.length ? 'disabled' : ''}>${this.sending ? '已提交，等待回复…' : activeTask ? '已有进行中任务' : '一键生成任务'}</button></div>
+            <button type="button" class="primary" data-action="generate" ${this.sending || this.loading || activeTask ? 'disabled' : ''}>${this.sending ? '已提交，等待回复…' : activeTask ? '已有进行中任务' : '一键生成任务'}</button></div>
             ${activeTask ? '<small>完成或取消当前任务后，才能创建下一项。</small>' : '<small>任务将在 AI 回复并由 MVU 结算脚本处理后，显示在上方。</small>'}</article>
-            <div class="footer">角色资料按目录映射读取；任务状态以当前聊天 MVU 为准。</div>${status}</main></div>`, 'system-tasks-main');
+            <div class="footer">角色资料来自当前聊天上下文、MVU 与自动检索的档案；任务状态以当前聊天 MVU 为准。</div>${status}</main></div>`, 'system-tasks-main');
         const root = document.querySelector('.phone-view-current .yzp-system-tasks') || document.querySelector('.yzp-system-tasks');
         root?.querySelector('[data-action="back"]')?.addEventListener('click', () => window.dispatchEvent(new CustomEvent('phone:goHome')));
         root?.querySelector('[data-action="refresh"]')?.addEventListener('click', () => { this.notice = ''; this.refresh(); });
@@ -247,27 +272,55 @@ export class SystemTasksApp {
     resolveRole(name) {
         const normalized = clean(name).normalize('NFKC');
         if (!normalized) return { error: '请先输入角色姓名。' };
-        const matches = (this.characters || []).filter(row => row.name.normalize('NFKC') === normalized);
-        if (!matches.length) return { error: `目录中没有找到“${normalized}”。请使用角色正式姓名。` };
-        if (matches.length > 1) return { error: `目录中找到 ${matches.length} 条“${normalized}”记录，来源不唯一；请先整理目录中的重复映射。` };
-        const role = matches[0];
-        if (!role.staticSources?.length) return { error: `已找到“${normalized}”的动态条目，但没有找到可用的静态资料条目。` };
-        if (!role.dynamicSources?.length) return { error: `已找到“${normalized}”的静态条目，但没有找到目录指定的动态条目“${role.dynamicComment}”。` };
-        if (role.staticSources.length !== 1 || role.dynamicSources.length !== 1) return { error: `“${normalized}”的静态或动态条目存在多个有效匹配，不能自动选择。` };
-        return { role, staticEntry: role.staticSources[0], dynamicEntry: role.dynamicSources[0] };
+        const entries = this.entries || flattenEntries(this.books);
+        const mappings = [...parseCentralDirectory(this.books), ...parseLocalDirectories(this.books)]
+            .filter(row => clean(row.name).normalize('NFKC') === normalized);
+        const mapping = mappings.length === 1 ? mappings[0] : null;
+        let scopedEntries = entries;
+        if (mapping?.book && entries.some(entry => entry.bookName === mapping.book)) {
+            scopedEntries = entries.filter(entry => entry.bookName === mapping.book);
+        }
+        const dynamicComment = mapping?.dynamicComment || `动态-${normalized}`;
+        let staticSources = sourceFor(scopedEntries, normalized, 'static', dynamicComment);
+        let dynamicSources = sourceFor(scopedEntries, normalized, 'dynamic', dynamicComment);
+        const preferContextBook = sources => {
+            const preferred = (sources || []).filter(source => this.preferredBooks?.includes(source.bookName || source.book));
+            return preferred.length ? preferred : sources;
+        };
+        staticSources = preferContextBook(staticSources);
+        dynamicSources = preferContextBook(dynamicSources);
+        if (staticSources.length > 1 || dynamicSources.length > 1) {
+            return { error: `“${normalized}”在当前角色档案中匹配到多条来源，无法安全判断对应角色，请先消除同名重复档案。` };
+        }
+        const mvuMatch = findMvuRole(this.mvu?.data, normalized);
+        const context = relevantChatContext(this.context().chat || [], normalized);
+        const staticEntry = staticSources[0] || null;
+        const dynamicEntry = dynamicSources[0] || null;
+        if (!staticEntry && !mvuMatch.role && !context.length) {
+            return { error: `当前聊天上下文、MVU 和全部可用角色档案中都没有找到“${normalized}”的资料。` };
+        }
+        if (!dynamicEntry && !mvuMatch.role && !context.length) {
+            return { error: `找到“${normalized}”的静态档案，但当前聊天上下文、MVU 与角色动态档案中都没有可用进度信息。` };
+        }
+        const book = staticEntry?.bookName || dynamicEntry?.bookName || mapping?.book || '当前聊天上下文';
+        const role = { id: JSON.stringify([book, normalized]), name: normalized, book, staticSources, dynamicSources };
+        return { role, staticEntry, dynamicEntry, mvuRole: mvuMatch.role, mvuRoleId: mvuMatch.id, context };
     }
 
     buildRequest(formalName, resolved, mvuRole, mvuRoleId) {
+        const entryData = entry => entry ? {
+            worldbook: entry.bookName || entry.book || '',
+            title: entry.comment || '',
+            uid: entry.uid ?? null,
+            content: entry.content || ''
+        } : null;
         const source = {
             role: formalName,
-            source: {
-                worldbook: resolved.role.book,
-                static: { title: resolved.staticEntry.comment, uid: resolved.staticEntry.uid, content: resolved.staticEntry.content },
-                dynamic: { title: resolved.dynamicEntry.comment, uid: resolved.dynamicEntry.uid, content: resolved.dynamicEntry.content }
-            },
+            source: { static: entryData(resolved.staticEntry), dynamic: entryData(resolved.dynamicEntry) },
+            current_context: resolved.context,
             current_mvu: { role_id: mvuRoleId || formalName, role: mvuRole || null }
         };
-        return `请根据当前聊天已激活的任务系统规则，为指定角色生成一项攻略任务。\n目标角色正式姓名：${formalName}\n\n以下是插件按 CWB 目录读取到的静态资料、动态资料和当前聊天 MVU。只把它们作为事实来源；关系阶段与角色边界以角色专属世界书为准，当前数值和任务状态以 MVU 为准。\n<任务角色资料JSON>\n${JSON.stringify(source, null, 2)}\n</任务角色资料JSON>\n\n必须先检查全局是否已有进行中的任务；若已有，不创建任务并说明原因。若可生成，任务主体为主角，目标与完成条件必须具体、可观察、符合角色当前目标及阶段。只创建一项，奖励遵循当前世界书规则。通过现有中文简报协议提交任务创建操作；不得直接改写余额或在插件本地另存任务。回复只简要显示任务卡或无法生成的原因。`;
+        return `请根据当前聊天已激活的任务系统规则，为指定角色生成一项攻略任务。\n目标角色正式姓名：${formalName}\n\n插件已从当前聊天上下文、最新 MVU 和自动检索到的对应角色档案中整理资料；CWB 目录和世界书绑定不是前置条件。只把以下资料作为事实来源，缺失信息不得编造；关系阶段与角色边界以角色专属角色档案为准，当前数值和任务状态以 MVU/当前聊天为准。\n<任务角色资料JSON>\n${JSON.stringify(source, null, 2)}\n</任务角色资料JSON>\n\n必须先检查全局是否已有进行中的任务；若已有，不创建任务并说明原因。若可生成，任务主体为主角，目标与完成条件必须具体、可观察、符合角色当前目标及阶段。只创建一项，奖励遵循当前聊天中已加载的任务规则。通过现有中文简报协议提交任务创建操作；不得直接改写余额或在插件本地另存任务。回复只简要显示任务卡或无法生成的原因。`;
     }
 
     async generate(root) {
@@ -301,7 +354,7 @@ export class SystemTasksApp {
             if (currentScope !== this.scope() || !this.isActive()) { this.sending = false; this.notice = '聊天已切换，任务请求留在输入框中，未自动发送。'; this.draw(); return; }
             try {
                 sendButton.click();
-                this.notice = `已从《${resolved.role.book}》读取“${resolved.staticEntry.comment}”和“${resolved.dynamicEntry.comment}”，并向当前聊天提交任务请求。MVU 更新后会自动刷新任务列表。`;
+                this.notice = `已读取“${roleName}”的当前聊天/MVU信息${resolved.staticEntry || resolved.dynamicEntry ? '与角色档案' : ''}，并向当前聊天提交任务请求。MVU 更新后会自动刷新任务列表。`;
                 this.draw();
                 clearTimeout(this.sendingFallbackTimer);
                 this.sendingFallbackTimer = setTimeout(() => {
