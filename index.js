@@ -5847,8 +5847,8 @@ if (window.GGP_Loaded) {
     function createTopPanel() {
         const extensionsMenu = document.getElementById('extensionsMenu');
         const topSettingsHolder = document.getElementById('top-settings-holder');
-        const toolPanelHost = topSettingsHolder || extensionsMenu;
-        const useExtensionsMenu = !topSettingsHolder && !!extensionsMenu;
+        const toolPanelHost = extensionsMenu || topSettingsHolder;
+        const useExtensionsMenu = !!extensionsMenu;
         if (!toolPanelHost) {
             console.error('❌ 找不到手机入口挂载点');
             return;
