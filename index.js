@@ -38,7 +38,7 @@ import {
 } from './apps/mofo/mofo-renderer.js';
 
 const ST_PHONE_BASE_URL = new URL('./', import.meta.url).href;
-const ST_PHONE_VERSION = '1.6.15';
+const ST_PHONE_VERSION = '1.6.16';
 const ST_PHONE_CSS_REVISION = '20261020-ios-complete-theme-v3';
 const ST_PHONE_APP_SWIPE_REVISION = '20261002-wechat-chat-return';
 const ST_PHONE_ALBUM_MODULE_REVISION = '20261006-story-image-outside-close';
@@ -147,8 +147,9 @@ const WECHAT_INITIAL_ENABLED_OFFLINE_KEYS = [
 const WECHAT_MESSAGE_SOUND_URL = new URL('./assets/sounds/iphone-message-notification.mp3', ST_PHONE_BASE_URL).href;
 const ST_PHONE_CURRENT_UPDATE = {
     version: ST_PHONE_VERSION,
-    date: '2026-10-20',
+    date: '2026-10-25',
     items: [
+        '【新增】任务系统应用：读取当前 MVU 进行中的任务，按 CWB 目录定位角色静态与动态资料，并向当前聊天提交任务生成请求。',
         '【图标更新】替换所有默认桌面应用与悬浮入口图标，并统一付款凭证顶部素材。',
         '【背景更新】更新默认壁纸，并迁移旧版内置默认壁纸与默认应用图标。',
         '【样式更新】将手机外壳、动态岛、状态栏、Dock、应用导航、卡片、弹窗和表单统一为 iOS 风格。'
@@ -1467,7 +1468,7 @@ if (window.GGP_Loaded) {
             imageGenerationManagerModule,
             worldbookManagerModule
         ] = await Promise.all([
-            import('./config/apps.js?v=1.6.15'),
+            import('./config/apps.js?v=1.6.16'),
             import('./config/storage.js?v=20261006-story-upload-console-cleanup'),
             import('./config/api-manager.js?v=20261009-unified-sse-parser'),
             import('./config/time-manager.js'),    // 👈 取消懒加载
@@ -11270,6 +11271,15 @@ if (window.GGP_Loaded) {
                         if (!window.VirtualPhone.dossierApp) window.VirtualPhone.dossierApp = new DossierApp(phoneShell, storage);
                         await window.VirtualPhone.dossierApp.render();
                     }).catch(error => console.error('[角色档案] 打开失败:', error));
+                } else if (appId === 'system-tasks') {
+                    import('./apps/system-tasks/system-tasks-app.js?v=1.6.16&r=20261025-mvu-task-center').then(async ({ SystemTasksApp }) => {
+                        if (currentApp !== 'system-tasks') return;
+                        if (!window.VirtualPhone.systemTasksApp) window.VirtualPhone.systemTasksApp = new SystemTasksApp(phoneShell, storage);
+                        await window.VirtualPhone.systemTasksApp.render();
+                    }).catch(error => {
+                        console.error('[任务系统] 打开失败:', error);
+                        phoneShell?.showNotification?.('错误', '任务系统模块加载失败', '❌');
+                    });
                 } else if (appId === 'settings') {
                     // 🔥 按需加载设置模块
                     loadSettingsModule().then(SettingsAppClass => {
