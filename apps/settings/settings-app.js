@@ -238,6 +238,7 @@ export class SettingsApp {
     _getDefaultAppsForCustomization() {
         return [
             { id: 'dossier', name: '角色档案', icon: '📇', color: '#547c72', defaultIcon: DEFAULT_APP_ICONS.dossier },
+            { id: 'campus-forum', name: '校园论坛', icon: '🏫', color: '#315c50', defaultIcon: DEFAULT_APP_ICONS.campusForum },
             { id: 'wechat', name: '微信', icon: '💬', color: '#07c160', defaultIcon: DEFAULT_APP_ICONS.wechat },
             { id: 'weibo', name: '微博', icon: '👁️‍🗨️', color: '#ff8200', defaultIcon: DEFAULT_APP_ICONS.weibo },
             { id: 'x', name: 'X', icon: 'X', color: '#000000', defaultIcon: DEFAULT_APP_ICONS.x },
