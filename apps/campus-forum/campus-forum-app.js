@@ -1,5 +1,5 @@
-import { CampusForumData } from './campus-forum-data.js?v=1.6.44';
-import { CampusForumView } from './campus-forum-view.js?v=1.6.44';
+import { CampusForumData } from './campus-forum-data.js?v=1.6.45';
+import { CampusForumView } from './campus-forum-view.js?v=1.6.45';
 
 export class CampusForumApp {
     constructor(phoneShell, storage) {
@@ -16,8 +16,10 @@ export class CampusForumApp {
         };
         this._homeHandler = () => { this.active = false; this.view.deactivate(); };
         this._visibilityHandler = () => { if (this.isActive()) this.refreshFromMvu(); };
+        this._forumFeedUpdatedHandler = () => { if (this.isActive()) this.view.render(); };
         window.addEventListener('phone:openApp', this._openHandler);
         window.addEventListener('phone:goHome', this._homeHandler);
+        window.addEventListener('phone:campusForumFeedUpdated', this._forumFeedUpdatedHandler);
         document.addEventListener('visibilitychange', this._visibilityHandler);
         const context = this.context();
         for (const name of ['MESSAGE_RECEIVED', 'MESSAGE_UPDATED', 'MESSAGE_DELETED', 'MESSAGE_SWIPED', 'GENERATION_ENDED']) {
@@ -40,7 +42,8 @@ export class CampusForumApp {
 
     async refreshFromMvu() {
         if (!this.isActive()) return;
-        this.data.getFeed();
+        const feed = this.data.getFeed();
+        this.data.generateNecessaryImages(feed).catch(error => console.warn('[Campus Forum] 配图生成失败:', error));
         this.view.render();
     }
 
@@ -49,14 +52,15 @@ export class CampusForumApp {
         const link = document.createElement('link');
         link.id = 'campus-forum-css';
         link.rel = 'stylesheet';
-        link.href = new URL('./campus-forum.css?v=1.6.44', import.meta.url).href;
+        link.href = new URL('./campus-forum.css?v=1.6.45', import.meta.url).href;
         document.head.appendChild(link);
     }
 
     async render() {
         this.active = true;
         try { await this.data.loadWorldbooks(false); } catch (_) { /* The current MVU feed remains readable without worldbook settings. */ }
-        this.data.getFeed();
+        const feed = this.data.getFeed();
+        this.data.generateNecessaryImages(feed).catch(error => console.warn('[Campus Forum] 配图生成失败:', error));
         this.view.render();
     }
 
@@ -88,6 +92,7 @@ export class CampusForumApp {
         window.removeEventListener('phone:swipeBack', this._swipeHandler);
         window.removeEventListener('phone:openApp', this._openHandler);
         window.removeEventListener('phone:goHome', this._homeHandler);
+        window.removeEventListener('phone:campusForumFeedUpdated', this._forumFeedUpdatedHandler);
         document.removeEventListener('visibilitychange', this._visibilityHandler);
         clearTimeout(this._refreshTimer);
     }
