@@ -1122,20 +1122,23 @@ export class ChatView {
         const fieldSpecs = [
             ['年龄', 'archive', ['年龄', 'age']],
             ['国籍', 'archive', ['国籍', '籍贯/国籍', 'nationality', 'country']],
-            ['职业/身份', 'archive', ['职业/身份', '职业', '身份', 'occupation', 'identity', 'job']],
+            ['职业/专业', 'archive', ['职业/专业', '职业/身份', '职业', '专业', '身份', 'occupation', 'identity', 'job', 'major']],
             ['学校', 'archive', ['学校', '院校', 'school', 'university']],
             ['校花榜排名', 'archive', ['校花榜排名', '校花排名', '排名', 'campusBeautyRank']],
             ['性格', 'archive', ['性格', 'personality']],
             ['隐藏特质', 'archive', ['隐藏特质', '隐藏性格', '秘密特质', 'hiddenTraits']],
-            ['颜值', 'archive', ['颜值', '颜值评分', '外貌评分', 'looks', 'beauty']],
+            ['颜值分数', 'archive', ['颜值分数', '颜值评分', '颜值', '外貌评分', 'looks', 'beauty']],
             ['身高', 'archive', ['身高', 'height']],
             ['罩杯', 'archive', ['罩杯', 'cupSize', 'bust']],
             ['外貌', 'archive', ['外貌', '外形', 'appearance']],
             ['背景', 'archive', ['背景', '人物背景', 'background', 'backstory']],
             ['固定喜好', 'archive', ['固定喜好', '喜好', '偏好', 'preferences', 'likes']],
-            ['与主角关系', 'mvu', ['与主角的关系', '与主角关系', 'relationship']],
+            ['与主角关系', 'mvu-archive', ['与主角的关系', '与主角关系', 'relationship']],
             ['恋爱状态', 'archive', ['恋爱状态', '感情状态', '恋爱关系', 'relationshipStatus', 'romanceStatus']],
-            ['好感度', 'mvu', ['好感度', '好感', 'affection']],
+            ['好感度', 'mvu-archive', ['好感度', '好感', 'affection']],
+            ['性欲值', 'mvu-archive-dynamic', ['性欲值', '性欲', '性欲度', '欲望值', '欲望', 'sexualDesire', 'sexualValue', 'sexDrive', 'sexuality', 'libido', 'desire']],
+            ['堕落值', 'mvu-archive-dynamic', ['堕落值', '堕落度', '堕落', 'depravity', 'corruption', 'fallenValue']],
+            ['角色等级', 'mvu-archive', ['角色等级', 'grade', 'roleGrade', '等级']],
             ['攻略进度', 'archive', ['攻略进度', '关系进度', '攻略阶段', 'relationshipProgress', 'romanceProgress']],
             ['当前目标与进度', 'goal', ['当前目标', 'currentGoal']],
             ['当前状态', 'archive-dynamic', ['当前状态', '角色状态', '状态', 'currentStatus', 'status']],
@@ -1164,6 +1167,8 @@ export class ChatView {
         for (const [label, source, aliases] of fieldSpecs) {
             let value;
             if (source === 'mvu') value = getMvuField(aliases);
+            else if (source === 'mvu-archive') value = getMvuField(aliases) ?? getArchiveField(aliases);
+            else if (source === 'mvu-archive-dynamic') value = getMvuField(aliases) ?? getArchiveField(aliases, { dynamicFirst: true });
             else if (source === 'goal') value = formatGoalProgress();
             else value = getArchiveField(aliases, { dynamicFirst: source === 'archive-dynamic' });
 
@@ -1179,9 +1184,10 @@ export class ChatView {
             values.set(label, formatProfileValue(value));
         }
         const sectionSpecs = [
-            { title: '基础资料', labels: ['年龄', '国籍', '职业/身份', '学校', '校花榜排名', '性格', '隐藏特质', '颜值'] },
+            { title: '关系数值', labels: ['好感度', '性欲值', '堕落值', '与主角关系'] },
+            { title: '基础资料', labels: ['年龄', '职业/专业', '国籍', '学校', '校花榜排名', '颜值分数', '角色等级', '性格', '隐藏特质'] },
             { title: '外形与背景', labels: ['身高', '罩杯', '外貌', '背景', '衣着', '发型'] },
-            { title: '关系与攻略', labels: ['固定喜好', '与主角关系', '恋爱状态', '好感度', '攻略进度', '当前目标与进度', '当前状态', '短期目标', '长期目标', '攻略建议'] }
+            { title: '关系与攻略', labels: ['固定喜好', '恋爱状态', '攻略进度', '当前目标与进度', '当前状态', '短期目标', '长期目标', '攻略建议'] }
         ];
         const details = fieldSpecs.map(([label]) => ({ label, value: values.get(label) || '未记录' }));
         return {
