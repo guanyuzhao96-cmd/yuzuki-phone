@@ -47,7 +47,7 @@ export class CampusForumView {
             </section>` : '';
         const empty = feed
             ? `<div class="campus-forum-empty">这个栏目还没有帖子。刷新论坛后会生成 3–5 条。</div>`
-            : `<div class="campus-forum-empty"><div class="campus-forum-empty-icon">🏫</div><b>当前楼层没有论坛帖子</b><span>请求生成后，角色卡会把帖子写入本轮 MVU；发送前请确认聊天输入框中的请求。</span></div>`;
+            : `<div class="campus-forum-empty"><div class="campus-forum-empty-icon">🏫</div><b>还没有论坛内容</b><span>点击“刷新论坛”，帖子会直接生成并显示在这里。</span></div>`;
         const status = feed
             ? `<div class="campus-forum-source-note">剧情日期 ${this._escape(feed.storyDate || '未记录')} · 参考 ${this._escape((feed.sourceBooks || []).join('、') || '未选择世界书')}</div>`
             : '';
@@ -59,7 +59,7 @@ export class CampusForumView {
                     <div class="campus-forum-header-title"><small>WEIFANG UNIVERSITY</small><b>校园论坛</b></div>
                     <button class="campus-forum-settings" type="button" aria-label="论坛设置"><i class="fa-solid fa-gear"></i></button>
                 </header>
-                <div class="campus-forum-toolbar"><div><b>校园热帖</b><span>${status}</span></div><button class="campus-forum-refresh" type="button" ${this._generating ? 'disabled' : ''}>${this._generating ? '<i class="fa-solid fa-spinner fa-spin"></i> 准备中' : '<i class="fa-solid fa-arrows-rotate"></i> 请求更新'}</button></div>
+                <div class="campus-forum-toolbar"><div><b>校园热帖</b><span>${status}</span></div><button class="campus-forum-refresh" type="button" ${this._generating ? 'disabled' : ''}>${this._generating ? '<i class="fa-solid fa-spinner fa-spin"></i> 生成中' : '<i class="fa-solid fa-arrows-rotate"></i> 刷新论坛'}</button></div>
                 ${this._notice ? `<div class="campus-forum-source-note">${this._escape(this._notice)}</div>` : ''}
                 ${hotspotHtml}
                 <nav class="campus-forum-tabs" aria-label="论坛栏目">${tabs}</nav>
@@ -84,8 +84,9 @@ export class CampusForumView {
         this.render();
         try {
             const result = await this.app.data.generateFeed();
-            this._notice = `请求已加入酒馆输入框（参考：${result.selectedBooks.join('、')}）。发送后由角色卡生成并保存本轮论坛数据。`;
-            this.app.phoneShell?.showNotification?.('校园论坛', '请求已放入聊天输入框，请确认后发送', '🏫');
+            const postCount = Object.values(result.feed?.postsBySection || {}).reduce((sum, posts) => sum + posts.length, 0);
+            this._notice = `已生成 ${postCount} 条帖子${result.feed?.hotspots?.length ? `和 ${result.feed.hotspots.length} 条热点` : ''}，参考：${result.selectedBooks.join('、')}。`;
+            this.app.phoneShell?.showNotification?.('校园论坛', `论坛已更新，共 ${postCount} 条帖子`, '🏫');
         } catch (error) {
             this._notice = error?.message || '论坛请求准备失败';
             this.app.phoneShell?.showNotification?.('论坛请求失败', this._notice, '⚠️');
