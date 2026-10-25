@@ -235,7 +235,7 @@ export class DossierApp {
         let body;
         if (this.settings) body = `<h2>目录索引</h2><p>自动关联当前聊天、角色及全局启用的世界书，通过目录中的完整姓名定位角色资料。</p><small>关联 ${this.books.length} 本世界书，识别 ${(this.indexes || []).length} 个目录，列出 ${this.characters.length} 个角色。</small>${(this.indexes || []).map(index => `<article><strong>${e(index.comment)}</strong><small>${e(index.book)} · UID ${e(index.uid)}</small><pre>${e(index.content)}</pre></article>`).join('')}${this.books.length ? `<details><summary>已检查的关联世界书</summary>${this.books.map(name => `<p>${e(name)}</p>`).join('')}</details>` : '<p>当前聊天没有可识别的关联世界书，请检查酒馆中的世界书绑定。</p>'}`;
         else if (role) body = this.details(role);
-        else body = `<div class="catalog-heading"><span class="catalog-kicker">CHARACTER COLLECTION</span><h2>角色图鉴</h2><small>动态角色档案 · ${this.characters.length} 位</small></div><input type="search" placeholder="搜索姓名、职业、身份或关系" aria-label="搜索角色" value="${e(this.search || '')}" data-search><div class="catalog-tools"><span>按角色卡片浏览完整档案</span><select data-sort aria-label="角色排序"><option value="name">按姓名</option><option value="affection">按好感度</option></select></div><div data-role-list>${this.roleList()}</div>${!this.characters.length ? '<article>尚未发现包含动态资料的角色。可在“来源”查看目录与世界书读取状态。</article>' : ''}`;
+        else body = `<div class="catalog-heading"><span class="catalog-kicker">CHARACTER COLLECTION</span><h2>角色图鉴</h2><small>动态角色档案 · ${this.characters.length} 位</small></div><input type="search" placeholder="搜索姓名、职业、身份或关系" aria-label="搜索角色" value="${e(this.search || '')}" data-search><div class="catalog-tools"><span>按角色卡片浏览完整档案</span><select data-sort aria-label="角色排序"><option value="name">按姓名</option><option value="affection">按好感度</option><option value="beauty">按颜值从高到低</option><option value="depravity">按堕落值从高到低</option><option value="grade">按角色等级从高到低</option><option value="height">按身高从高到低</option><option value="cup">按罩杯从大到小</option></select></div><div data-role-list>${this.roleList()}</div>${!this.characters.length ? '<article>尚未发现包含动态资料的角色。可在“来源”查看目录与世界书读取状态。</article>' : ''}`;
         this.phoneShell.setContent(`<style>${css}</style><div class="yzp-dossier"><header><button data-action="back" aria-label="返回">‹</button><strong>角色档案</strong><button data-action="settings">来源</button><button data-action="refresh" ${this.loading ? 'disabled' : ''}>${this.loading ? '读取中' : '刷新'}</button></header><main>${this.errors.map(error => `<p class="warning">${e(error)}</p>`).join('')}${body}<small>只读 · 世界书与 MVU 的原始内容不会被修改</small></main></div>`, 'dossier-main');
         const root = document.querySelector('.phone-view-current .yzp-dossier') || document.querySelector('.yzp-dossier');
         if (!root) return;
@@ -288,37 +288,63 @@ export class DossierApp {
 
     roleList() {
         const query = (this.search || '').trim().toLocaleLowerCase();
+        const numberFrom = value => {
+            const match = String(value ?? '').match(/-?\\d+(?:\\.\\d+)?/);
+            return match ? Number(match[0]) : NaN;
+        };
+        const gradeOrder = ['D','C','B','A','S','SS','SSS'];
+        const cupOrder = ['AA','A','B','C','D','E','F','G','H','I','J','K'];
         const records = this.characters.map(role => {
             const fields = role.sources.flatMap(source => source.fields || []);
             const mvu = findMvuRole(this.mvu?.data, role.name);
             const findField = pattern => fields.find(field => pattern.test(field.label))?.value || '';
+            const findExact = labels => fields.find(field => labels.includes(field.label))?.value || '';
             const relationship = mvu.role?.['与主角的关系'] ?? mvu.role?.['与主角关系'] ?? mvu.role?.relationship ?? findField(/与主角关系|当前关系|关系/);
             const affection = mvu.role?.['好感度'] ?? mvu.role?.affection;
             const depravity = mvu.role?.['堕落值'] ?? mvu.role?.depravity;
-            const avatarField = fields.find(field => ['头像','头像URL','头像链接','角色头像','立绘'].includes(field.label))?.value || '';
+            const beauty = numberFrom(findExact(['颜值','颜值分数']));
+            const height = numberFrom(findExact(['身高']));
+            const grade = String(findExact(['角色等级','等级'])).trim().toUpperCase();
+            const gradeRank = gradeOrder.indexOf(grade);
+            const cupText = String(findExact(['罩杯'])).toUpperCase();
+            const cup = cupText.match(/AA|[A-K]/)?.[0] || '';
+            const cupRank = cupOrder.indexOf(cup);
             const savedAvatar = this.prefs().avatars?.[role.id] || '';
+            const avatarField = findExact(['头像','头像URL','头像链接','角色头像','立绘']);
             const avatarCandidate = savedAvatar || avatarField;
-            const avatar = /^(https?:\/\/|data:image\/|\/)/i.test(String(avatarCandidate)) ? String(avatarCandidate) : '';
+            const avatar = /^(https?:\\/\\/|data:image\\/|\\/)/i.test(String(avatarCandidate)) ? String(avatarCandidate) : '';
             const searchText = [role.name, role.book, relationship, ...fields.map(field => `${field.label} ${field.value}`)].join(' ').toLocaleLowerCase();
-            return { role, mvu, relationship, affection, depravity, avatar, searchText };
+            return { role, mvu, relationship, affection, depravity, beauty, height, gradeRank, cupRank, avatar, searchText };
         }).filter(record => !query || record.searchText.includes(query));
-        if ((this.sort || 'name') === 'affection') records.sort((a, b) => {
-            const av = Number(a.affection), bv = Number(b.affection);
-            if (!Number.isFinite(av)) return Number.isFinite(bv) ? 1 : a.role.name.localeCompare(b.role.name, 'zh-CN');
-            if (!Number.isFinite(bv)) return -1;
-            return bv - av || a.role.name.localeCompare(b.role.name, 'zh-CN');
-        });
-        else records.sort((a, b) => a.role.name.localeCompare(b.role.name, 'zh-CN'));
+        const sortKey = this.sort || 'name';
+        if (sortKey === 'name') records.sort((a,b)=>a.role.name.localeCompare(b.role.name,'zh-CN'));
+        else {
+            records.sort((a,b) => {
+                const av = sortKey === 'affection' ? numberFrom(a.affection)
+                    : sortKey === 'depravity' ? numberFrom(a.depravity)
+                    : sortKey === 'beauty' ? a.beauty
+                    : sortKey === 'height' ? a.height
+                    : sortKey === 'grade' ? a.gradeRank
+                    : sortKey === 'cup' ? a.cupRank : NaN;
+                const bv = sortKey === 'affection' ? numberFrom(b.affection)
+                    : sortKey === 'depravity' ? numberFrom(b.depravity)
+                    : sortKey === 'beauty' ? b.beauty
+                    : sortKey === 'height' ? b.height
+                    : sortKey === 'grade' ? b.gradeRank
+                    : sortKey === 'cup' ? b.cupRank : NaN;
+                if (!Number.isFinite(av)) return Number.isFinite(bv) ? 1 : a.role.name.localeCompare(b.role.name,'zh-CN');
+                if (!Number.isFinite(bv)) return -1;
+                return bv-av || a.role.name.localeCompare(b.role.name,'zh-CN');
+            });
+        }
         if (!records.length) return '<article class="muted">没有匹配的角色。</article>';
         return `<div class="role-grid">${records.map(({ role, relationship, affection, depravity, avatar }) => {
-            const image = avatar ? `<img data-avatar-image src="${e(avatar)}" alt="${e(role.name)}头像" loading="lazy">` : `<span class="role-initial">${e(role.name.slice(0, 1))}</span>`;
-            const badges = [
-                ['好感度', affection], ['堕落值', depravity], ['关系', relationship]
-            ].map(([label, value]) => `<span class="role-badge">${e(label)}：${e(value === undefined || value === null || value === '' ? '未记录' : String(value).replace(/\\s+/g, ' ').slice(0, 32))}</span>`).join('');
+            const image = avatar ? `<img data-avatar-image src="${e(avatar)}" alt="${e(role.name)}头像" loading="lazy">` : `<span class="role-initial">${e(role.name.slice(0,1))}</span>`;
+            const badges = [['好感度',affection],['堕落值',depravity],['关系',relationship]]
+                .map(([label,value])=>`<span class="role-badge">${e(label)}：${e(value===undefined||value===null||value===''?'未记录':String(value).replace(/\\s+/g,' ').slice(0,32))}</span>`).join('');
             return `<button class="role-card" data-role="${e(role.id)}" aria-label="查看${e(role.name)}的完整档案"><span class="role-avatar" data-avatar-role="${e(role.id)}" title="点击头像设置或更换图片">${image}<span class="avatar-edit">＋</span></span><span class="role-info"><span class="role-name">${e(role.name)}</span><span class="role-badges">${badges}</span></span><span class="role-arrow" aria-hidden="true">›</span></button>`;
         }).join('')}</div>`;
     }
-
     onClick(event, root, role) {
         const avatar = event.target.closest('[data-avatar-role]');
         if (avatar) { event.preventDefault(); event.stopPropagation(); this.chooseRoleAvatar(avatar.dataset.avatarRole); return; }
