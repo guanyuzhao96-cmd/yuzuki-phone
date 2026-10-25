@@ -4,7 +4,7 @@ export const CAMPUS_FORUM_APP_KEY = 'campus_forum';
 export const CAMPUS_FORUM_PUBLIC_SECTIONS = ['恋爱八卦', '校园女神', '偶遇目击', '表白寻人', '匿名树洞'];
 const GENERATED_FEED_KEY = 'campus_forum_generated_feed';
 const FORUM_SYSTEM_PROMPT = `你是校园论坛内容生成器。严格遵守以下规则，只返回一个 JSON 对象，不要解释、不要 Markdown。回复的第一个字符必须是 {，最后一个字符必须是 }：
-1. 公开板块固定为：${CAMPUS_FORUM_PUBLIC_SECTIONS.join('、')}。每个公开板块生成 3–5 条帖子；每帖 1–2 条评论。只有暗线权限已解锁时，才可额外生成“暗线”帖子。
+1. 公开板块固定为：${CAMPUS_FORUM_PUBLIC_SECTIONS.join('、')}。每个公开板块准确生成 3 条帖子（符合 3–5 条要求）；每帖只写 1 条简短评论。只有暗线权限已解锁时，才可额外生成“暗线”帖子。
 2. 帖子只围绕给定剧情时间线和校园恋爱话题。不得补写主角行为、确认角色关系、编造时间线热点或把旧事写成刚发生。
 3. 事件发生不代表公众知情。公开热点或公开帖子只能采用“公开场合目击、本人公开发布、或剧情明确出现传播”的内容，并写出传播/目击依据。私下关系、秘密、未公开信息和读心结果不得进入公开板块。
 4. 帖子日期必须是当前剧情日期或之前五个剧情日内的有效日期，不得晚于当前剧情日期。热点最多 6 条，只能从编号时间线候选事件中选择；每条热点必须带 source_event_index 和公开依据。没有合格热点时返回空数组。
@@ -287,8 +287,9 @@ export class CampusForumData {
         const { sections, hiddenUnlocked } = this.getBoardState();
         const apiManager = window.VirtualPhone?.apiManager;
         if (!apiManager?.callAI) throw new Error('API Manager 尚未就绪，请重新打开校园论坛后重试');
-        const timelineText = timelineEvents.length
-            ? timelineEvents.map((item, index) => `[${index + 1}] ${item.date}｜${item.event}（来源：${item.source}）`).join('\n')
+        const promptEvents = timelineEvents.slice(0, 16);
+        const timelineText = promptEvents.length
+            ? promptEvents.map((item, index) => `[${index + 1}] ${item.date}｜${item.event.slice(0, 240)}（来源：${item.source}）`).join('\n')
             : '所选世界书中没有找到日期范围内的可用时间线事件；不得补造热点，只能生成不影响主线的一般恋爱话题。';
         const oldFeed = this.getFeed();
         const oldPosts = Object.values(oldFeed?.postsBySection || {}).flat();
@@ -299,7 +300,7 @@ export class CampusForumData {
             `暗线权限：${hiddenUnlocked ? '已解锁，可以生成暗线板块' : '未解锁，不能生成暗线内容'}`,
             `栏目：${sections.join('、')}`,
             `已知时间线候选（只可据此生成热点）：\n${timelineText}`,
-            `当前论坛帖子（用于避免重复）：\n${oldPosts.length ? oldPosts.slice(-30).map(post => `- ${post.date}｜${post.section}｜${post.title}｜${post.content}`).join('\n') : '暂无'}`,
+            `当前论坛帖子（仅标题，用于避免重复）：\n${oldPosts.length ? oldPosts.slice(-10).map(post => `- ${post.date}｜${post.section}｜${String(post.title || '').slice(0, 60)}`).join('\n') : '暂无'}`,
             '请按系统规则生成论坛内容。公开内容必须有明确的公开目击、本人公开发布或传播依据；对没有公开依据的剧情只能生成不涉及该秘密的一般校园恋爱话题。'
         ].join('\n\n');
         const context = window.SillyTavern?.getContext?.() || {};
@@ -316,7 +317,7 @@ export class CampusForumData {
             const controller = typeof AbortController === 'function' ? new AbortController() : null;
             const timeout = setTimeout(() => controller?.abort(), 240000);
             let response;
-            const retryInstruction = attempt === 0 ? '' : '\n\n上一次回复未能解析为 JSON。请重新生成完整结果，不要解释、不要 Markdown、不要代码围栏；只输出一个以 { 开始、以 } 结束的 JSON 对象，字段必须为“帖子”和“热点”。帖子数组每个栏目至少 3 条。';
+            const retryInstruction = attempt === 0 ? '' : '\n\n上一次回复未通过 JSON 或栏目完整性校验。请重新生成完整结果，不要解释、不要 Markdown、不要代码围栏；只输出一个以 { 开始、以 } 结束的 JSON 对象，字段必须为“帖子”和“热点”。所有请求栏目都必须各有 3 条帖子。';
             try {
                 response = await apiManager.callAI([
                     { role: 'system', name: 'SYSTEM (校园论坛规则)', content: FORUM_SYSTEM_PROMPT, isPhoneMessage: true },
@@ -339,7 +340,18 @@ export class CampusForumData {
                 ? responseText.map(part => String(part?.text || part?.content || '')).join('\n').trim()
                 : String(responseText || '').trim();
             try {
-                parsed = parseJsonPayload(rawText);
+                const candidate = parseJsonPayload(rawText);
+                const candidatePayload = candidate?.论坛 && typeof candidate.论坛 === 'object' ? candidate.论坛 : candidate;
+                const candidatePosts = candidatePayload?.帖子 || candidatePayload?.posts || candidatePayload?.forum_view;
+                if (!Array.isArray(candidatePosts)) throw new Error('论坛生成结果缺少帖子列表');
+                const sectionCounts = Object.fromEntries(sections.map(section => [section, 0]));
+                candidatePosts.forEach(post => {
+                    const section = safeText(post?.板块 || post?.section, 24);
+                    if (Object.prototype.hasOwnProperty.call(sectionCounts, section)) sectionCounts[section] += 1;
+                });
+                const missing = sections.filter(section => sectionCounts[section] < 3);
+                if (missing.length) throw new Error(`论坛 JSON 栏目不完整：${missing.join('、')}`);
+                parsed = candidate;
                 break;
             } catch (error) {
                 parseError = error;
