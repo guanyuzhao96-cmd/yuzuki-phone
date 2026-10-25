@@ -1408,12 +1408,13 @@ export class ContactsView {
             const remark = String(contact.remark || '').trim();
             const avatar = this.app.renderAvatar(contact.avatar, '👤', contact.name || '联系人');
             const fallbackDetails = [
-                ['年龄', '国籍', '职业/身份', '学校', '校花榜排名', '性格', '隐藏特质', '颜值'],
+                ['好感度', '性欲值', '堕落值', '与主角关系'],
+                ['年龄', '职业/专业', '国籍', '学校', '校花榜排名', '颜值分数', '角色等级', '性格', '隐藏特质'],
                 ['身高', '罩杯', '外貌', '背景', '衣着', '发型'],
-                ['固定喜好', '与主角关系', '恋爱状态', '好感度', '攻略进度', '当前目标与进度', '当前状态', '短期目标', '长期目标', '攻略建议']
+                ['固定喜好', '恋爱状态', '攻略进度', '当前目标与进度', '当前状态', '短期目标', '长期目标', '攻略建议']
             ];
             const info = profile || {
-                sections: ['基础资料', '外形与背景', '关系与攻略'].map((title, index) => ({
+                sections: ['关系数值', '基础资料', '外形与背景', '关系与攻略'].map((title, index) => ({
                     title,
                     details: fallbackDetails[index].map(label => ({ label, value: '未记录' }))
                 }))
