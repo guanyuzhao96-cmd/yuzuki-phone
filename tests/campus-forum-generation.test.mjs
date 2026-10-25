@@ -132,6 +132,46 @@ test('识别栏目、内容、发布时间字段和字符串评论，并保留�
     }
 });
 
+test('兼容按栏目名分组的帖子对象，并在暗线未解锁时忽略暗线栏目', async () => {
+    const saved = new Map();
+    const storage = {
+        get(key, fallback) { return saved.has(key) ? saved.get(key) : fallback; },
+        set(key, value) { saved.set(key, value); }
+    };
+    const previousTime = window.VirtualPhone.timeManager.getCurrentStoryTime;
+    window.VirtualPhone.timeManager.getCurrentStoryTime = () => ({ date: '2025-09-12' });
+    const groupedPosts = Object.fromEntries(CAMPUS_FORUM_PUBLIC_SECTIONS.map(section => [section,
+        Array.from({ length: 3 }, (_, index) => ({
+            标题: `${section}分组帖${index + 1}`,
+            内容: '公开场合的普通校园见闻。',
+            发帖人: '路过同学',
+            日期: '2025-09-12'
+        }))
+    ]));
+    groupedPosts.暗线 = [{
+        标题: '未公开的私下关系',
+        内容: '这条秘密内容不应进入公开论坛。',
+        发帖人: '暗线记录者',
+        日期: '2025-09-12'
+    }];
+    window.VirtualPhone.apiManager = {
+        async callAI() { return { success: true, summary: JSON.stringify({ 帖子: groupedPosts, 热点: [] }) }; }
+    };
+
+    try {
+        const data = new CampusForumData(storage);
+        const result = await data.generateFeed();
+        for (const section of CAMPUS_FORUM_PUBLIC_SECTIONS) {
+            assert.equal(result.feed.postsBySection[section].length, 3, `${section}分组帖子应被识别`);
+        }
+        assert.equal(result.feed.postsBySection.恋爱八卦[0].author, '路过同学', '应兼容发帖人字段');
+        assert.equal(result.feed.postsBySection.恋爱八卦[0].comments[0].content, '蹲后续，感谢分享。', '没有评论时应提供不增加事实的默认跟帖');
+        assert.equal(result.feed.postsBySection.暗线, undefined, '未解锁时不创建暗线栏目');
+    } finally {
+        window.VirtualPhone.timeManager.getCurrentStoryTime = previousTime;
+    }
+});
+
 test('点击帖子卡片后进入可滚动详情并显示评论', () => {
     const post = {
         section: '恋爱八卦',
