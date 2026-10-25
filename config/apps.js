@@ -13,6 +13,7 @@
 export const DEFAULT_APP_ICONS = Object.freeze({
     dossier: new URL('../assets/icons/ios/dossier.svg?v=1.6.9', import.meta.url).href,
     systemTasks: new URL('../assets/icons/ios/tasks.svg?v=1.6.16', import.meta.url).href,
+    systemShop: new URL('../assets/icons/ios/shop.svg?v=1.6.17', import.meta.url).href,
     campusForum: new URL('../assets/icons/ios/campus-forum.svg?v=1.6.15', import.meta.url).href,
     wechat: new URL('../assets/icons/ios/wechat.svg?v=1.6.9', import.meta.url).href,
     weibo: new URL('../assets/icons/ios/weibo.svg?v=1.6.9', import.meta.url).href,
@@ -34,6 +35,7 @@ export const DEFAULT_PHONE_WALLPAPER = new URL('../assets/wallpapers/ios-default
 export const APPS = [
     { id: 'dossier', name: '角色档案', icon: '📇', defaultIcon: DEFAULT_APP_ICONS.dossier, color: '#547c72', data: {} },
     { id: 'system-tasks', name: '任务', icon: '📋', defaultIcon: DEFAULT_APP_ICONS.systemTasks, color: '#6157c8', data: {} },
+    { id: 'system-shop', name: '商店', icon: '🛍️', defaultIcon: DEFAULT_APP_ICONS.systemShop, color: '#5142b8', data: {} },
     { id: 'campus-forum', name: '校园论坛', icon: '🏫', defaultIcon: DEFAULT_APP_ICONS.campusForum, color: '#315c50', badge: 0, data: {} },
     // 第一行
     {

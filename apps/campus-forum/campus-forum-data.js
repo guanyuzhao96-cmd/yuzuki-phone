@@ -102,7 +102,7 @@ function safeText(value, maxLength = 600) {
     return String(value ?? '').trim().slice(0, maxLength);
 }
 
-function normalizePost(post = {}, sectionName = '') {
+function normalizePost(post = {}, sectionName = '', fallbackDate = '') {
     const title = safeText(post.title || post.标题, 80);
     const author = safeText(post.author || post.作者, 40) || '匿名同学';
     const content = safeText(post.content || post.body || post.正文, 600);
@@ -116,7 +116,7 @@ function normalizePost(post = {}, sectionName = '') {
         section: sectionName,
         title,
         author,
-        date: getDateText(post.date || post.日期) || getStoryDate().iso,
+        date: getDateText(post.date || post.日期) || getDateText(fallbackDate),
         content,
         comments
     };
@@ -130,10 +130,11 @@ function extractMvuForumState(context = {}) {
     );
     const data = snapshot?.data || {};
     const forum = data.forum || data.论坛 || data.system?.forum || data.system?.论坛 || {};
-    const unlocked = forum.hiddenUnlocked ?? forum.hidden_unlocked ?? forum.secretUnlocked
+    const unlocked = forum.unlocked ?? forum.hiddenUnlocked ?? forum.hidden_unlocked ?? forum.secretUnlocked
         ?? forum.secret_unlocked ?? forum.暗线已解锁 ?? forum.暗线权限 ?? data.system?.forum?.hiddenUnlocked;
     return {
         hiddenUnlocked: unlocked === true || unlocked === 1 || ['true', '1', 'yes'].includes(String(unlocked || '').toLowerCase()),
+        forum,
         snapshot
     };
 }
@@ -143,37 +144,34 @@ export class CampusForumData {
         this.storage = storage;
         this.worldbookManager = window.VirtualPhone?.worldbookManager;
         this._feed = null;
-        this._feedScopeKey = '';
         this._books = [];
         this.lookbackDays = Math.max(3, Math.min(5, Number(this.storage?.get?.('campus_forum_lookback_days') || 5)));
     }
 
-    _getFeedKey() {
-        const context = this.storage?.getContext?.() || window.SillyTavern?.getContext?.() || {};
-        const character = String(context.characterId ?? context.name2 ?? 'default').replace(/[^\w.-]/g, '_');
-        const chat = String(context.chatMetadata?.file_name || context.chatId || 'default_chat').replace(/[^\w.-]/g, '_');
-        return `campus_forum_feed_${character}_${chat}`;
-    }
-
     getFeed() {
-        const scopeKey = this._getFeedKey();
-        if (this._feedScopeKey === scopeKey && this._feed) return this._feed;
-        this._feedScopeKey = scopeKey;
-        this._feed = null;
-        const saved = this.storage?.get?.(scopeKey, null);
-        try {
-            this._feed = typeof saved === 'string' ? JSON.parse(saved) : saved;
-        } catch (_error) {
-            this._feed = null;
+        const context = window.SillyTavern?.getContext?.() || {};
+        const { snapshot, forum, hiddenUnlocked } = extractMvuForumState(context);
+        const data = snapshot?.data || {};
+        const rawPosts = Array.isArray(data.forum_view) ? data.forum_view : [];
+        if (!snapshot || !rawPosts.length) { this._feed = null; return null; }
+        const sections = hiddenUnlocked ? [...CAMPUS_FORUM_PUBLIC_SECTIONS, '暗线'] : CAMPUS_FORUM_PUBLIC_SECTIONS;
+        const postsBySection = Object.fromEntries(sections.map(section => [section, []]));
+        const storyDate = safeText(data.scene?.date || data.scene?.日期, 32);
+        for (const post of rawPosts) {
+            const section = safeText(post?.板块 || post?.section, 24);
+            if (!postsBySection[section] || postsBySection[section].length >= 5) continue;
+            const normalized = normalizePost(post, section, storyDate);
+            if (normalized) postsBySection[section].push(normalized);
         }
-        return this._feed && typeof this._feed === 'object' ? this._feed : null;
-    }
-
-    async saveFeed(feed) {
-        this._feedScopeKey = this._getFeedKey();
-        this._feed = feed;
-        await this.storage?.set?.(this._feedScopeKey, JSON.stringify(feed));
-        return feed;
+        const hotspots = (Array.isArray(forum.hotspots) ? forum.hotspots : Array.isArray(forum.热点) ? forum.热点 : [])
+            .slice(0, 6).map(item => ({
+                date: getDateText(item?.日期 || item?.date),
+                event: safeText(item?.事件 || item?.event, 300),
+                basis: safeText(item?.依据 || item?.basis, 240),
+                heat: ['低', '中', '高'].includes(String(item?.热度 || item?.heat || '')) ? String(item?.热度 || item?.heat) : '低'
+            })).filter(item => item.event);
+        this._feed = { storyDate, sections, postsBySection, hotspots, sourceBooks: this.getSelectedBooks().map(book => book.name), fromMvu: true };
+        return this._feed;
     }
 
     async loadWorldbooks(force = true) {
@@ -249,57 +247,29 @@ export class CampusForumData {
     }
 
     async generateFeed() {
-        const apiManager = window.VirtualPhone?.apiManager;
-        if (!apiManager?.callAI) throw new Error('API Manager 未初始化');
         await this.loadWorldbooks(true);
         const selectedBooks = this.getSelectedBooks();
         if (selectedBooks.length === 0) throw new Error('请先在设置中选择一本文字时间线所在的世界书');
         const timelineEvents = this.getTimelineEvents();
         const storyDate = getStoryDate()?.iso || '';
         const { sections, hiddenUnlocked } = this.getBoardState();
+        const input = document.querySelector('#send_textarea');
+        if (!input) throw new Error('没有找到酒馆聊天输入框；请打开正常聊天窗口后重试');
+        if (String(input.value || '').trim()) throw new Error('聊天输入框已有未发送内容。请先发送或清空，再请求论坛更新');
         const timelineText = timelineEvents.length
-            ? timelineEvents.map(item => `- ${item.date}｜${item.event}\n  来源：${item.source}`).join('\n')
-            : '所选世界书中没有找到当前剧情日期前 3–5 天内的可用时间线事件。请只生成不影响主线的一般恋爱话题，不得补造热点。';
-        const system = `你是潍坊学院虚构校园论坛的数据生成器。用户打开论坛后，只返回合法 JSON，不要 Markdown、HTML、代码围栏或额外说明。\n\n公开栏目固定为：${CAMPUS_FORUM_PUBLIC_SECTIONS.join('、')}。${hiddenUnlocked ? '暗线已由 MVU 明确解锁，可额外生成“暗线”栏目。' : '暗线未解锁，禁止生成暗线栏目和暗线热点。'}\n每个启用栏目必须生成 3–5 条帖子，每帖 0–4 条评论。帖子与评论围绕成年校园人物的恋爱主题，可涉及配角，不必都围绕主角。允许从时间线转化热点，也可写不影响主线的一般恋爱话题。\n热点只允许使用公开场合目击、本人公开发布或剧情明确传播的事件。所给时间线仅是剧情事实，不代表校园公众知情；私下关系、未公开秘密、读心结果、私聊和高度保密事件不得进入公开论坛。传闻必须标为未证实并给出传播依据。不得补写用户行为、确认角色关系或泄露个人隐私。旧事件不得写成刚发生。日期不得晚于当前剧情日期。\n输出结构：{\"热点\":[{\"日期\":\"YYYY-MM-DD\",\"事件\":\"简短事件\",\"依据\":\"公开目击/公开发布/传播依据\",\"热度\":\"低/中/高\"}],\"帖子\":[{\"板块\":\"栏目名\",\"标题\":\"标题\",\"作者\":\"学生昵称\",\"日期\":\"YYYY-MM-DD\",\"正文\":\"帖子正文\",\"评论\":[{\"作者\":\"昵称\",\"内容\":\"评论\"}]}]}。热点最多 6 条，帖子每栏 3–5 条，标题不超过 80 字，正文不超过 600 字，评论最多 4 条。`;
-        const userPrompt = `当前剧情日期：${storyDate || '未记录'}\n本次热点时间范围：当前剧情日及之前 ${this.lookbackDays - 1} 天。\n参考世界书：${selectedBooks.map(book => book.name).join('、')}\n\n【时间线候选事件】\n${timelineText}\n\n请严格按 JSON 结构生成栏目：${sections.join('、')}。`;
-        const context = window.SillyTavern?.getContext?.() || {};
-        const configuredMaxTokens = Number.parseInt(context.max_response_length, 10) || Number.parseInt(context.max_length, 10) || 6000;
-        const result = await apiManager.callAI([
-            { role: 'system', name: 'SYSTEM (校园论坛规则)', content: system, isPhoneMessage: true },
-            { role: 'user', name: '校园论坛请求', content: userPrompt, isPhoneMessage: true }
-        ], { appId: 'campus_forum', max_tokens: Math.max(6000, configuredMaxTokens) });
-        if (!result?.success) throw new Error(result?.error || '校园论坛生成失败');
-
-        const parsed = parseJsonPayload(result.summary || result.content || result.text || '');
-        const rawPosts = Array.isArray(parsed.帖子) ? parsed.帖子 : (Array.isArray(parsed.posts) ? parsed.posts : []);
-        const postsBySection = {};
-        sections.forEach(section => { postsBySection[section] = []; });
-        rawPosts.forEach(post => {
-            const section = safeText(post?.板块 || post?.section, 24);
-            if (!Object.prototype.hasOwnProperty.call(postsBySection, section)) return;
-            const normalized = normalizePost(post, section);
-            if (normalized && postsBySection[section].length < 5) postsBySection[section].push(normalized);
-        });
-        const underfilled = sections.filter(section => postsBySection[section].length < 3);
-        if (underfilled.length > 0) throw new Error(`以下栏目帖子不足 3 条，请重新刷新：${underfilled.join('、')}`);
-
-        const hotspots = (Array.isArray(parsed.热点) ? parsed.热点 : (Array.isArray(parsed.hotspots) ? parsed.hotspots : []))
-            .slice(0, 6)
-            .map(item => ({
-                date: getDateText(item?.日期 || item?.date),
-                event: safeText(item?.事件 || item?.event, 300),
-                basis: safeText(item?.依据 || item?.basis, 240),
-                heat: ['低', '中', '高'].includes(String(item?.热度 || item?.heat || '')) ? String(item?.热度 || item?.heat) : '低'
-            }))
-            .filter(item => item.date && item.event && item.basis && !PRIVATE_EVENT_PATTERN.test(item.event));
-        const feed = {
-            storyDate,
-            generatedAt: Date.now(),
-            sourceBooks: selectedBooks.map(book => book.name),
-            sections,
-            postsBySection,
-            hotspots
-        };
-        return this.saveFeed(feed);
+            ? timelineEvents.map(item => `- ${item.date}｜${item.event}（来源：${item.source}）`).join('\n')
+            : '所选世界书中没有找到日期范围内的可用时间线事件；不得补造热点，只能生成不影响主线的一般恋爱话题。';
+        const request = [
+            '打开校园论坛',
+            `参考世界书：${selectedBooks.map(book => book.name).join('、')}`,
+            `热点范围：当前剧情日及之前 ${this.lookbackDays - 1} 天；当前日期为 ${storyDate || '未记录'}。`,
+            `暗线权限：${hiddenUnlocked ? 'MVU 已解锁，可按角色卡规则显示' : '尚未解锁，不得生成或显示暗线内容'}。`,
+            `时间线候选事件：\n${timelineText}`,
+            `请严格遵守角色卡世界书中的论坛规则，在唯一中文简报中提交论坛帖子和有依据的新热点；栏目为：${sections.join('、')}。不要输出 HTML，不要把私人或高保密事件写进公开论坛。`
+        ].join('\n');
+        input.value = request;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+        return { queued: true, selectedBooks: selectedBooks.map(book => book.name), storyDate };
     }
 }

@@ -7,9 +7,41 @@ export class CampusForumApp {
         this.storage = storage;
         this.data = new CampusForumData(storage);
         this.view = new CampusForumView(this);
+        this.active = false;
         this._swipeHandler = event => this.handleSwipeBack(event);
         window.addEventListener('phone:swipeBack', this._swipeHandler);
+        this._openHandler = event => {
+            this.active = event.detail?.appId === 'campus-forum';
+            if (this.active) this.refreshFromMvu();
+        };
+        this._homeHandler = () => { this.active = false; this.view.deactivate(); };
+        this._visibilityHandler = () => { if (this.isActive()) this.refreshFromMvu(); };
+        window.addEventListener('phone:openApp', this._openHandler);
+        window.addEventListener('phone:goHome', this._homeHandler);
+        document.addEventListener('visibilitychange', this._visibilityHandler);
+        const context = this.context();
+        for (const name of ['MESSAGE_RECEIVED', 'MESSAGE_UPDATED', 'MESSAGE_DELETED', 'MESSAGE_SWIPED', 'GENERATION_ENDED']) {
+            const type = context.event_types?.[name];
+            if (type) context.eventSource?.on(type, () => {
+                if (!this.isActive()) return;
+                clearTimeout(this._refreshTimer);
+                this._refreshTimer = setTimeout(() => this.refreshFromMvu(), name === 'GENERATION_ENDED' ? 250 : 500);
+            });
+        }
         this._preloadCSS();
+    }
+
+    context() { return window.SillyTavern?.getContext?.() || {}; }
+
+    isActive() {
+        const panel = document.getElementById('phone-panel');
+        return this.active && !document.hidden && (!panel || panel.classList.contains('phone-panel-open'));
+    }
+
+    async refreshFromMvu() {
+        if (!this.isActive()) return;
+        this.data.getFeed();
+        this.view.render();
     }
 
     _preloadCSS() {
@@ -21,7 +53,10 @@ export class CampusForumApp {
         document.head.appendChild(link);
     }
 
-    render() {
+    async render() {
+        this.active = true;
+        try { await this.data.loadWorldbooks(false); } catch (_) { /* The current MVU feed remains readable without worldbook settings. */ }
+        this.data.getFeed();
         this.view.render();
     }
 
@@ -39,11 +74,16 @@ export class CampusForumApp {
     }
 
     deactivate() {
+        this.active = false;
         this.view?.deactivate?.();
     }
 
     destroy() {
         this.deactivate();
         window.removeEventListener('phone:swipeBack', this._swipeHandler);
+        window.removeEventListener('phone:openApp', this._openHandler);
+        window.removeEventListener('phone:goHome', this._homeHandler);
+        document.removeEventListener('visibilitychange', this._visibilityHandler);
+        clearTimeout(this._refreshTimer);
     }
 }

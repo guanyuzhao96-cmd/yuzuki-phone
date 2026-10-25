@@ -38,7 +38,7 @@ import {
 } from './apps/mofo/mofo-renderer.js';
 
 const ST_PHONE_BASE_URL = new URL('./', import.meta.url).href;
-const ST_PHONE_VERSION = '1.6.16';
+const ST_PHONE_VERSION = '1.6.17';
 const ST_PHONE_CSS_REVISION = '20261020-ios-complete-theme-v3';
 const ST_PHONE_APP_SWIPE_REVISION = '20261002-wechat-chat-return';
 const ST_PHONE_ALBUM_MODULE_REVISION = '20261006-story-image-outside-close';
@@ -149,6 +149,8 @@ const ST_PHONE_CURRENT_UPDATE = {
     version: ST_PHONE_VERSION,
     date: '2026-10-25',
     items: [
+        '【新增】系统商店模块：同步角色卡三级商店商品、技能、余额、购齐进度与现金兑换，并通过当前聊天提交购买请求。',
+        '【同步】校园论坛读取角色卡本轮 MVU 帖子与热点；请求更新时沿用角色卡论坛生成及权限规则。',
         '【新增】任务系统应用：读取当前 MVU 进行中的任务，按 CWB 目录定位角色静态与动态资料，并向当前聊天提交任务生成请求。',
         '【图标更新】替换所有默认桌面应用与悬浮入口图标，并统一付款凭证顶部素材。',
         '【背景更新】更新默认壁纸，并迁移旧版内置默认壁纸与默认应用图标。',
@@ -1468,7 +1470,7 @@ if (window.GGP_Loaded) {
             imageGenerationManagerModule,
             worldbookManagerModule
         ] = await Promise.all([
-            import('./config/apps.js?v=1.6.16'),
+            import('./config/apps.js?v=1.6.17'),
             import('./config/storage.js?v=20261006-story-upload-console-cleanup'),
             import('./config/api-manager.js?v=20261009-unified-sse-parser'),
             import('./config/time-manager.js'),    // 👈 取消懒加载
@@ -11186,6 +11188,7 @@ if (window.GGP_Loaded) {
                         ['album', phone.albumApp],
                         ['mofo', phone.mofoApp],
                         ['campus-forum', phone.campusForumApp],
+                        ['system-shop', phone.systemShopApp],
                         ['settings', phone.settingsApp]
                     ];
                     appEntries.forEach(([appId, appInstance]) => {
@@ -11280,6 +11283,21 @@ if (window.GGP_Loaded) {
                         console.error('[任务系统] 打开失败:', error);
                         phoneShell?.showNotification?.('错误', '任务系统模块加载失败', '❌');
                     });
+                } else if (appId === 'system-shop') {
+                    import(`./apps/system-shop/system-shop-app.js?v=${ST_PHONE_VERSION}&r=20261025-rolecard-shop-v2513`).then(module => {
+                        if (currentApp !== 'system-shop') return;
+                        try {
+                            if (!window.VirtualPhone.systemShopApp) window.VirtualPhone.systemShopApp = new module.SystemShopApp(phoneShell);
+                            window.VirtualPhone.systemShopApp.render();
+                        } catch (initError) {
+                            console.error('❌ 系统商店初始化失败:', initError);
+                            phoneShell?.showNotification?.('错误', '系统商店加载失败', '❌');
+                        }
+                    }).catch(importError => {
+                        if (currentApp !== 'system-shop') return;
+                        console.error('❌ 系统商店模块加载失败:', importError);
+                        phoneShell?.showNotification?.('错误', '系统商店模块加载失败', '❌');
+                    });
                 } else if (appId === 'settings') {
                     // 🔥 按需加载设置模块
                     loadSettingsModule().then(SettingsAppClass => {
@@ -11359,7 +11377,7 @@ if (window.GGP_Loaded) {
                             phoneShell?.showNotification('错误', '日记模块加载失败', '❌');
                         });
                 } else if (appId === 'campus-forum') {
-                    import(`./apps/campus-forum/campus-forum-app.js?v=${ST_PHONE_VERSION}&r=20261025-campus-forum`)
+                    import(`./apps/campus-forum/campus-forum-app.js?v=${ST_PHONE_VERSION}&r=20261025-card-mvu-forum`)
                         .then(module => {
                             if (currentApp !== 'campus-forum') return;
                             try {
