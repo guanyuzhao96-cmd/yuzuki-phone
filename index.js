@@ -38,7 +38,7 @@ import {
 } from './apps/mofo/mofo-renderer.js';
 
 const ST_PHONE_BASE_URL = new URL('./', import.meta.url).href;
-const ST_PHONE_VERSION = '1.6.17';
+const ST_PHONE_VERSION = '1.6.18';
 const ST_PHONE_CSS_REVISION = '20261020-ios-complete-theme-v3';
 const ST_PHONE_APP_SWIPE_REVISION = '20261002-wechat-chat-return';
 const ST_PHONE_ALBUM_MODULE_REVISION = '20261006-story-image-outside-close';
@@ -149,7 +149,9 @@ const ST_PHONE_CURRENT_UPDATE = {
     version: ST_PHONE_VERSION,
     date: '2026-10-25',
     items: [
-        '【新增】系统商店模块：同步角色卡三级商店商品、技能、余额、购齐进度与现金兑换，并通过当前聊天提交购买请求。',
+        '【修复】任务系统改为按钮级绑定点击事件，并更新模块缓存标记，修复任务生成按钮无响应。',
+        '【扫描】刷新时检索全部酒馆世界书（包含未激活世界书），仅列出存在动态角色档案的角色。',
+        '【新增】系统商店模块：同步角色卡三级商店商品、技能、余额、购齐进度与现金兑换，并通过当前聊天提交购买请求。'
         '【同步】校园论坛读取角色卡本轮 MVU 帖子与热点；请求更新时沿用角色卡论坛生成及权限规则。',
         '【新增】任务系统应用：读取当前 MVU 进行中的任务，按 CWB 目录定位角色静态与动态资料，并向当前聊天提交任务生成请求。',
         '【图标更新】替换所有默认桌面应用与悬浮入口图标，并统一付款凭证顶部素材。',
@@ -1470,7 +1472,7 @@ if (window.GGP_Loaded) {
             imageGenerationManagerModule,
             worldbookManagerModule
         ] = await Promise.all([
-            import('./config/apps.js?v=1.6.17'),
+            import('./config/apps.js?v=1.6.18'),
             import('./config/storage.js?v=20261006-story-upload-console-cleanup'),
             import('./config/api-manager.js?v=20261009-unified-sse-parser'),
             import('./config/time-manager.js'),    // 👈 取消懒加载
@@ -11275,7 +11277,7 @@ if (window.GGP_Loaded) {
                         await window.VirtualPhone.dossierApp.render();
                     }).catch(error => console.error('[角色档案] 打开失败:', error));
                 } else if (appId === 'system-tasks') {
-                    import('./apps/system-tasks/system-tasks-app.js?v=1.6.16&r=20261025-mvu-task-center').then(async ({ SystemTasksApp }) => {
+                    import(`./apps/system-tasks/system-tasks-app.js?v=${ST_PHONE_VERSION}&r=20261025-task-button-click-fix`).then(async ({ SystemTasksApp }) => {
                         if (currentApp !== 'system-tasks') return;
                         if (!window.VirtualPhone.systemTasksApp) window.VirtualPhone.systemTasksApp = new SystemTasksApp(phoneShell, storage);
                         await window.VirtualPhone.systemTasksApp.render();
