@@ -7,6 +7,7 @@ export class CampusForumView {
         this._generating = false;
         this._notice = '';
         this._failedResponse = '';
+        this._selectedPost = null;
     }
 
     _escape(value = '') {
@@ -20,6 +21,10 @@ export class CampusForumView {
     }
 
     render() {
+        if (this.currentView === 'post' && this._selectedPost) {
+            this.renderPostDetail(this._selectedPost);
+            return;
+        }
         this.currentView = 'feed';
         const feed = this.app.data.getFeed();
         const boardState = this.app.data.getBoardState();
@@ -30,15 +35,14 @@ export class CampusForumView {
         const tabs = sections.map(section => `
             <button class="campus-forum-tab${section === this.activeSection ? ' is-active' : ''}" type="button" data-forum-section="${this._escape(section)}" aria-pressed="${section === this.activeSection}">${this._escape(section)}</button>
         `).join('');
-        const postCards = posts.map(post => `
+        const postCards = posts.map((post, index) => `
             <article class="campus-forum-post">
-                <div class="campus-forum-post-meta"><span>${this._escape(post.author || '匿名同学')}</span><time>${this._escape(post.date || feed?.storyDate || '')}</time></div>
-                <h2>${this._escape(post.title)}</h2>
-                <div class="campus-forum-post-body">${this._escape(post.content)}</div>
-                ${Array.isArray(post.comments) && post.comments.length ? `
-                    <div class="campus-forum-comments">
-                        ${post.comments.map(comment => `<div class="campus-forum-comment"><b>${this._escape(comment.author)}</b><span>${this._escape(comment.content)}</span></div>`).join('')}
-                    </div>` : '<div class="campus-forum-no-comments">暂无评论</div>'}
+                <button class="campus-forum-post-open" type="button" data-forum-post-index="${index}" aria-label="打开帖子：${this._escape(post.title)}">
+                    <div class="campus-forum-post-meta"><span>${this._escape(post.author || '匿名同学')}</span><time>${this._escape(post.date || feed?.storyDate || '')}</time></div>
+                    <h2>${this._escape(post.title)}</h2>
+                    <div class="campus-forum-post-body">${this._escape(post.content)}</div>
+                    <div class="campus-forum-post-footer"><span><i class="fa-regular fa-comment"></i> ${Array.isArray(post.comments) ? post.comments.length : 0} 条评论</span><span>查看详情 <i class="fa-solid fa-chevron-right"></i></span></div>
+                </button>
             </article>
         `).join('');
         const hotspotHtml = hotspots.length ? `
@@ -78,10 +82,58 @@ export class CampusForumView {
         root?.querySelector('.campus-forum-settings')?.addEventListener('click', () => this.renderSettings());
         root?.querySelector('.campus-forum-refresh')?.addEventListener('click', () => this.generate());
         root?.querySelector('.campus-forum-download-response')?.addEventListener('click', () => this.downloadFailedResponse());
+        root?.querySelectorAll('[data-forum-post-index]').forEach(button => button.addEventListener('click', () => {
+            const post = posts[Number(button.dataset.forumPostIndex)];
+            if (post) this.openPost(post);
+        }));
         root?.querySelectorAll('[data-forum-section]').forEach(button => button.addEventListener('click', () => {
             this.activeSection = String(button.dataset.forumSection || '恋爱八卦');
             this.render();
         }));
+    }
+
+    openPost(post) {
+        if (!post || typeof post !== 'object') return false;
+        this._selectedPost = post;
+        this.currentView = 'post';
+        this.renderPostDetail(post);
+        return true;
+    }
+
+    renderPostDetail(post = this._selectedPost) {
+        if (!post) return this.render();
+        this._selectedPost = post;
+        this.currentView = 'post';
+        const comments = Array.isArray(post.comments) ? post.comments : [];
+        const commentHtml = comments.length
+            ? comments.map(comment => `<div class="campus-forum-comment"><b>${this._escape(comment.author || '路过同学')}</b><span>${this._escape(comment.content || '')}</span></div>`).join('')
+            : '<div class="campus-forum-no-comments">这条帖子暂时没有评论。</div>';
+        this._setContent(`
+            <div class="campus-forum-app campus-forum-post-page">
+                <header class="campus-forum-header">
+                    <button class="campus-forum-back campus-forum-detail-back" type="button" aria-label="返回论坛"><i class="fa-solid fa-chevron-left"></i></button>
+                    <div class="campus-forum-header-title"><small>${this._escape(post.section || '校园论坛')}</small><b>帖子详情</b></div>
+                    <span class="campus-forum-header-spacer"></span>
+                </header>
+                <main class="campus-forum-post-detail-scroll">
+                    <article class="campus-forum-post-detail">
+                        <div class="campus-forum-post-meta"><span>${this._escape(post.author || '匿名同学')}</span><time>${this._escape(post.date || '')}</time></div>
+                        <h1>${this._escape(post.title || '未命名帖子')}</h1>
+                        <div class="campus-forum-post-detail-body">${this._escape(post.content || '')}</div>
+                    </article>
+                    <section class="campus-forum-detail-comments">
+                        <div class="campus-forum-detail-comments-heading"><b>全部评论</b><span>${comments.length} 条</span></div>
+                        <div class="campus-forum-comments">${commentHtml}</div>
+                    </section>
+                </main>
+            </div>
+        `, 'campus-forum-post');
+        const root = document.querySelector('.phone-view-current .campus-forum-post-page');
+        root?.querySelector('.campus-forum-detail-back')?.addEventListener('click', () => {
+            this._selectedPost = null;
+            this.currentView = 'feed';
+            this.render();
+        });
     }
 
     async generate() {
