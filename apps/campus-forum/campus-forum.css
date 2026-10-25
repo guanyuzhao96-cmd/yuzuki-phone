@@ -1,0 +1,60 @@
+.campus-forum-app{height:100%;min-height:0;display:flex;flex-direction:column;overflow:hidden;background:#f4f6f9;color:#17202e;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding-top:max(34px,env(safe-area-inset-top));box-sizing:border-box}
+.campus-forum-app *{box-sizing:border-box}
+.campus-forum-header{height:56px;flex:0 0 56px;display:grid;grid-template-columns:40px minmax(0,1fr) 40px;align-items:center;padding:0 13px;background:rgba(255,255,255,.96);border-bottom:1px solid #e8ebef}
+.campus-forum-back,.campus-forum-settings{width:36px;height:36px;border:0;border-radius:12px;background:#f4f6f9;color:#415166;font-size:16px;display:flex;align-items:center;justify-content:center}
+.campus-forum-settings{justify-self:end}
+.campus-forum-header-title{min-width:0;text-align:center;display:flex;flex-direction:column;line-height:1.15}
+.campus-forum-header-title small{font-size:8px;letter-spacing:1.2px;color:#8893a1;font-weight:700}
+.campus-forum-header-title b{font-size:17px;color:#17202e;margin-top:3px}
+.campus-forum-header-spacer{width:36px}
+.campus-forum-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 15px 10px}
+.campus-forum-toolbar>div{display:flex;flex-direction:column;min-width:0;gap:4px}
+.campus-forum-toolbar>div>b{font-size:20px;letter-spacing:.2px}
+.campus-forum-toolbar>div>span{font-size:10px;color:#8993a2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:230px}
+.campus-forum-refresh{height:35px;flex:0 0 auto;padding:0 12px;border:0;border-radius:18px;background:#254c3d;color:white;font-size:11px;font-weight:700}
+.campus-forum-refresh:disabled{opacity:.65}
+.campus-forum-hotspot-panel{margin:0 12px 11px;padding:12px 13px;background:#fff;border:1px solid #edf0f2;border-radius:14px}
+.campus-forum-section-heading{display:flex;justify-content:space-between;align-items:center;margin-bottom:7px;font-size:12px;font-weight:750;color:#27384c}
+.campus-forum-section-heading span+span{color:#9aa4af;font-size:10px;font-weight:500}
+.campus-forum-hotspot{display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-top:1px solid #f0f2f4}
+.campus-forum-hotspot time{flex:0 0 68px;padding-top:1px;font-size:10px;color:#9aa4af}
+.campus-forum-hotspot div{min-width:0;display:grid;gap:3px}
+.campus-forum-hotspot b{font-size:11px;line-height:1.5;font-weight:650;color:#39495b}
+.campus-forum-hotspot small{font-size:10px;line-height:1.45;color:#9aa4af}
+.campus-forum-tabs{flex:0 0 auto;display:flex;gap:7px;overflow-x:auto;padding:2px 12px 11px;scrollbar-width:none}
+.campus-forum-tabs::-webkit-scrollbar{display:none}
+.campus-forum-tab{min-height:34px;padding:0 13px;white-space:nowrap;border:1px solid #e7ebef;border-radius:17px;background:#fff;color:#657183;font-size:11px}
+.campus-forum-tab.is-active{background:#254c3d;border-color:#254c3d;color:#fff;font-weight:700}
+.campus-forum-feed{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:0 12px 20px}
+.campus-forum-post{margin-bottom:10px;padding:14px 14px 12px;border:1px solid #ebeff2;border-radius:15px;background:#fff;box-shadow:0 2px 8px rgba(24,40,54,.025)}
+.campus-forum-post-meta{display:flex;justify-content:space-between;align-items:center;gap:8px;color:#8b96a3;font-size:10px}
+.campus-forum-post-meta span{font-weight:650;color:#496254}
+.campus-forum-post h2{margin:10px 0 7px;color:#17202e;font-size:15px;line-height:1.45}
+.campus-forum-post-body{font-size:12px;line-height:1.75;white-space:pre-wrap;overflow-wrap:anywhere;color:#485565}
+.campus-forum-comments{display:grid;gap:7px;margin-top:12px;padding:10px 11px;border-radius:11px;background:#f7f8f8}
+.campus-forum-comment{display:flex;gap:7px;align-items:flex-start;font-size:10.5px;line-height:1.6;color:#687482}
+.campus-forum-comment b{flex:0 0 auto;color:#4e6e5b;font-weight:650}
+.campus-forum-no-comments{margin-top:10px;color:#a5adb5;font-size:10px}
+.campus-forum-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;min-height:180px;padding:24px 20px;border:1px dashed #d9dfe4;border-radius:15px;background:rgba(255,255,255,.65);color:#87919c;text-align:center;font-size:11px;line-height:1.6}
+.campus-forum-empty b{color:#445365;font-size:13px}
+.campus-forum-empty-icon{font-size:30px}
+.campus-forum-source-note{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.campus-forum-settings-page{flex:1;min-height:0;overflow-y:auto;padding:15px 12px 24px}
+.campus-forum-settings-card{padding:16px;border:1px solid #e8edf0;border-radius:16px;background:#fff}
+.campus-forum-settings-card h2{margin:0;color:#253346;font-size:16px}
+.campus-forum-settings-card p{margin:7px 0 13px;color:#808b98;font-size:11px;line-height:1.65}
+.campus-forum-book-list{display:grid;gap:7px;max-height:42vh;overflow-y:auto}
+.campus-forum-book-row{display:flex;align-items:flex-start;gap:10px;padding:11px;border:1px solid #edf0f2;border-radius:12px;background:#fbfcfc}
+.campus-forum-book-row input{width:18px;height:18px;flex:0 0 18px;margin:1px 0 0;accent-color:#254c3d}
+.campus-forum-book-row span{display:grid;gap:4px;min-width:0}
+.campus-forum-book-row b{font-size:11px;line-height:1.4;color:#334357;overflow-wrap:anywhere}
+.campus-forum-book-row small{font-size:9px;line-height:1.4;color:#929ca7}
+.campus-forum-settings-empty,.campus-forum-settings-loading,.campus-forum-settings-error{padding:24px 10px;text-align:center;color:#8c97a2;font-size:11px;line-height:1.6}
+.campus-forum-settings-error{color:#a64c4c}
+.campus-forum-range-label{display:block;margin:17px 0 7px;color:#4b5b6d;font-size:11px;font-weight:650}
+.campus-forum-settings-card select{width:100%;height:40px;padding:0 10px;border:1px solid #e2e7eb;border-radius:10px;background:#fff;color:#334357;font-size:12px}
+.campus-forum-privacy-note{display:flex;gap:9px;align-items:flex-start;margin-top:14px;padding:10px;border-radius:11px;background:#f2f7f3;color:#688071;font-size:10px;line-height:1.6}
+.campus-forum-privacy-note i{padding-top:2px}
+.campus-forum-save-settings{width:100%;height:43px;margin-top:15px;border:0;border-radius:12px;background:#254c3d;color:#fff;font-size:13px;font-weight:700}
+.campus-forum-save-settings:disabled{opacity:.45}
+@media(max-width:360px){.campus-forum-toolbar{padding-left:12px;padding-right:12px}.campus-forum-toolbar>div>span{max-width:168px}.campus-forum-refresh{padding:0 9px;font-size:10px}.campus-forum-post{padding:12px}.campus-forum-tab{padding:0 11px}}
