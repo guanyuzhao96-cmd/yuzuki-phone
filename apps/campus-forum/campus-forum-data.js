@@ -1,5 +1,4 @@
 import { latestMvuSnapshot } from '../dossier/dossier-data.js';
-import { resolveImageMime } from '../../config/image-mime.js';
 
 export const CAMPUS_FORUM_APP_KEY = 'campus_forum';
 export const CAMPUS_FORUM_PUBLIC_SECTIONS = ['恋爱八卦', '校园女神', '偶遇目击', '表白寻人', '匿名树洞'];
@@ -9,8 +8,7 @@ const FORUM_SYSTEM_PROMPT = `你是校园论坛内容生成器。严格遵守以
 2. 帖子只围绕给定剧情时间线和校园恋爱话题。不得补写主角行为、确认角色关系、编造时间线热点或把旧事写成刚发生。
 3. 事件发生不代表公众知情。公开热点或公开帖子只能采用“公开场合目击、本人公开发布、或剧情明确出现传播”的内容，并写出传播/目击依据。私下关系、秘密、未公开信息和读心结果不得进入公开板块。
 4. 帖子日期必须是当前剧情日期或之前五个剧情日内的有效日期，不得晚于当前剧情日期。热点最多 6 条，只能从编号时间线候选事件中选择；每条热点必须带 source_event_index 和公开依据。没有合格热点时返回空数组。
-5. 配图只给最多 2 条确实适合展示公开现场的帖子；普通文字讨论、表白寻人、私密/传闻内容不要配图。配图提示用英文，描绘校园环境或公开活动的宽景，不要生成可识别的角色/主角面孔，不要补造私下场景。其余帖子的“配图提示”留空。
-6. 只返回如下结构：{"帖子":[{"板块":"恋爱八卦","标题":"","作者":"","日期":"YYYY-MM-DD","正文":"","评论":[{"作者":"","内容":""}],"配图提示":"optional English image prompt or empty string"}],"热点":[{"source_event_index":1,"日期":"YYYY-MM-DD","事件":"","依据":"","热度":"低|中|高"}]}`;
+5. 只返回如下结构：{"帖子":[{"板块":"恋爱八卦","标题":"","作者":"","日期":"YYYY-MM-DD","正文":"","评论":[{"作者":"","内容":""}]}],"热点":[{"source_event_index":1,"日期":"YYYY-MM-DD","事件":"","依据":"","热度":"低|中|高"}]}`;
 
 const PRIVATE_EVENT_PATTERN = /私密|私下|秘密|保密|隐瞒|未公开|卧室|床上|私聊|读心|偷拍|胁迫|被迫|暗中|单独约会|秘密关系|性关系|性行为|裸露/;
 const PUBLIC_EVENT_LEAK_PATTERN = /秘密关系|私下.{0,4}(?:关系|约会|见面|交往|接触|行为)|未公开(?:的)?(?:关系|身份|事件|信息)|卧室|床上|读心(?:到|结果|内容)|(?:偷拍到|偷拍视频)|胁迫|被迫发生|性关系|性行为|裸露|裸照/;
@@ -116,12 +114,6 @@ function safeText(value, maxLength = 600) {
     return String(value ?? '').trim().slice(0, maxLength);
 }
 
-function defaultForumImagePrompt(section = '', title = '', content = '') {
-    const text = `${title}\n${content}`;
-    if (section !== '校园女神' || !/迎新活动|公开活动|表演|演出|舞台|节目|比赛|运动会|展览|活动现场|现场表演/.test(text)) return '';
-    return 'Documentary-style wide shot of a public university campus event with students performing or attending in the background, natural daylight, lively but realistic campus atmosphere, candid composition, faces small or turned away and not identifiable, no named character likeness, no private scene, no readable text, no logos.';
-}
-
 function responseToText(value) {
     if (typeof value === 'string') return value;
     if (Array.isArray(value)) {
@@ -150,20 +142,13 @@ function normalizePost(post = {}, sectionName = '', fallbackDate = '') {
             content: safeText(comment?.content || comment?.内容, 300)
         }).filter(comment => comment.content);
     if (!comments.length) comments.push({ author: '路过同学', content: '蹲后续，感谢分享。' });
-    const imagePrompt = safeText(post.imagePrompt || post.image_prompt || post.配图提示 || post.图片提示 || '', 1200)
-        || defaultForumImagePrompt(sectionName, title, content);
     return {
         section: sectionName,
         title,
         author,
         date: getDateText(post.date || post.日期 || post.发布时间 || post.publishTime) || getDateText(fallbackDate),
         content,
-        comments,
-        imagePrompt,
-        imageDescription: safeText(post.imageDescription || post.image_description || post.配图描述, 160) || title,
-        imageUrl: '',
-        imageStatus: imagePrompt ? 'pending' : 'none',
-        imageError: ''
+        comments
     };
 }
 
@@ -208,7 +193,6 @@ export class CampusForumData {
         this._generatedFeed = this._readGeneratedFeed();
         this._generatePromise = null;
         this._lastAIResponse = '';
-        this._forumImagePromise = null;
         this._books = [];
         this.lookbackDays = Math.max(3, Math.min(5, Number(this.storage?.get?.('campus_forum_lookback_days') || 5)));
     }
@@ -242,79 +226,6 @@ export class CampusForumData {
             })).filter(item => item.event);
         this._feed = { storyDate, sections, postsBySection, hotspots, sourceBooks: this.getSelectedBooks().map(book => book.name), fromMvu: true };
         return this._feed;
-    }
-
-    _notifyForumFeedUpdated() {
-        if (typeof CustomEvent === 'function') window.dispatchEvent?.(new CustomEvent('phone:campusForumFeedUpdated'));
-    }
-
-    async generateNecessaryImages(feed = this._generatedFeed) {
-        if (!feed || feed.fromMvu || this._forumImagePromise) return this._forumImagePromise;
-        const allPosts = Object.values(feed.postsBySection || {}).flat();
-        allPosts.forEach(post => {
-            if (!post.imagePrompt) post.imagePrompt = defaultForumImagePrompt(post.section, post.title, post.content);
-            if (post.imageUrl) post.imageStatus = 'done';
-            else if (post.imagePrompt && !post.imageStatus) post.imageStatus = 'pending';
-        });
-        const candidates = allPosts.filter(post => post?.imagePrompt && !post.imageUrl && post.imageStatus === 'pending').slice(0, 2);
-        if (!candidates.length) return null;
-        this._forumImagePromise = (async () => {
-            await this.storage?.set?.(GENERATED_FEED_KEY, feed);
-            this._notifyForumFeedUpdated();
-            for (const post of candidates) await this.generatePostImage(post, feed);
-        })().finally(() => { this._forumImagePromise = null; });
-        return this._forumImagePromise;
-    }
-
-    async generatePostImage(post, feed = this._generatedFeed) {
-        if (!post?.imagePrompt || post.imageStatus === 'loading' || post.imageStatus === 'done') return false;
-        const generationManager = window.VirtualPhone?.imageGenerationManager;
-        const uploadManager = window.VirtualPhone?.imageManager;
-        if (this.storage && generationManager && generationManager.storage !== this.storage) generationManager.storage = this.storage;
-        post.imageStatus = 'loading';
-        post.imageError = '';
-        await this.storage?.set?.(GENERATED_FEED_KEY, feed);
-        this._notifyForumFeedUpdated();
-        try {
-            if (!generationManager?.generate) throw new Error('图片生成管理器未初始化');
-            const result = await generationManager.generate({ app: 'x', prompt: post.imagePrompt });
-            const rawImage = String(result?.imageUrl || result?.imageData || '').trim();
-            post.imageUrl = await this._persistForumGeneratedImage(rawImage, uploadManager);
-            if (!post.imageUrl) throw new Error('图片生成成功，但没有可保存的图片');
-            post.imageStatus = 'done';
-            post.imageProvider = String(result?.provider || '').trim();
-            post.imageModel = String(result?.model || '').trim();
-        } catch (error) {
-            post.imageStatus = 'failed';
-            post.imageError = String(error?.message || '图片生成失败').slice(0, 240);
-        }
-        await this.storage?.set?.(GENERATED_FEED_KEY, feed);
-        this._notifyForumFeedUpdated();
-        return post.imageStatus === 'done';
-    }
-
-    async _persistForumGeneratedImage(rawImage, uploadManager) {
-        const image = String(rawImage || '').trim();
-        if (!image) return '';
-        if (/^\/backgrounds\//i.test(image)) return image;
-        if (!uploadManager) throw new Error('图片上传管理器未初始化');
-        let uploaded = '';
-        if (/^data:image\//i.test(image)) {
-            if (!uploadManager.uploadDataUrl) throw new Error('图片管理器不支持保存生成图片');
-            uploaded = await uploadManager.uploadDataUrl(image, 'campus_forum_img');
-        } else {
-            if (!uploadManager.uploadBlob) throw new Error('图片管理器不支持保存网络图片');
-            const response = await fetch(image, { cache: 'no-store' });
-            if (!response.ok) throw new Error(`读取生成图片失败（HTTP ${response.status}）`);
-            const blob = await response.blob();
-            const bytes = new Uint8Array(await blob.arrayBuffer());
-            const mime = resolveImageMime(bytes, blob.type);
-            if (!bytes.length || !mime) throw new Error('生成结果不是有效图片');
-            uploaded = await uploadManager.uploadBlob(new Blob([bytes], { type: mime }), 'campus_forum_img');
-        }
-        const normalized = String(uploaded || '').trim();
-        if (!/^\/backgrounds\//i.test(normalized)) throw new Error('配图未保存到本地图片目录');
-        return normalized;
     }
 
     _readGeneratedFeed() {
