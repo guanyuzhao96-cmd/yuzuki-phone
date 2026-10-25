@@ -224,16 +224,24 @@ export class SystemTasksApp {
             ? '<div class="notice">目录中没有找到启用且包含内容的动态角色档案（条目名称应为“动态-角色名”）。</div>'
             : '<div class="notice">未找到角色目录。请确认当前聊天已绑定包含 CWB 角色目录的世界书。</div>';
         const status = this.loading ? '<small>正在读取世界书目录与最新 MVU…</small>' : `<small>已读取 ${this.books.length} 本关联世界书 · ${this.characters.length} 条含动态资料的角色记录 · ${escapeHtml(this.readAt || '')}</small>`;
-        this.phoneShell.setContent(`<style>${css}</style><div class="yzp-system-tasks"><header><button data-action="back" aria-label="返回">‹</button><strong>任务系统</strong><button class="secondary" data-action="refresh" ${this.loading ? 'disabled' : ''}>刷新</button></header><main>
+        this.phoneShell.setContent(`<style>${css}</style><div class="yzp-system-tasks"><header><button type="button" data-action="back" aria-label="返回">‹</button><strong>任务系统</strong><button type="button" class="secondary" data-action="refresh" ${this.loading ? 'disabled' : ''}>刷新</button></header><main>
             ${errors}${this.notice ? `<div class="notice">${escapeHtml(this.notice)}</div>` : ''}
             <h2>当前任务</h2>${taskList}
             <h2>生成攻略任务</h2><article><p class="muted">输入角色姓名后，模块会从目录定位该角色的静态资料和动态资料，并附上当前 MVU 状态提交给本轮 AI。</p>
             ${sourceErrors}<div class="form"><input id="yzp-task-role-name" list="yzp-task-role-options" placeholder="输入角色正式姓名" autocomplete="off" aria-label="任务目标角色姓名"><datalist id="yzp-task-role-options">${names.map(name => `<option value="${escapeHtml(name)}"></option>`).join('')}</datalist>
-            <button class="primary" data-action="generate" ${this.sending || this.loading || activeTask || !names.length ? 'disabled' : ''}>${this.sending ? '已提交，等待回复…' : activeTask ? '已有进行中任务' : '一键生成任务'}</button></div>
+            <button type="button" class="primary" data-action="generate" ${this.sending || this.loading || activeTask || !names.length ? 'disabled' : ''}>${this.sending ? '已提交，等待回复…' : activeTask ? '已有进行中任务' : '一键生成任务'}</button></div>
             ${activeTask ? '<small>完成或取消当前任务后，才能创建下一项。</small>' : '<small>任务将在 AI 回复并由 MVU 结算脚本处理后，显示在上方。</small>'}</article>
             <div class="footer">角色资料按目录映射读取；任务状态以当前聊天 MVU 为准。</div>${status}</main></div>`, 'system-tasks-main');
         const root = document.querySelector('.phone-view-current .yzp-system-tasks') || document.querySelector('.yzp-system-tasks');
-        if (root) root.onclick = event => this.onClick(event, root);
+        root?.querySelector('[data-action="back"]')?.addEventListener('click', () => window.dispatchEvent(new CustomEvent('phone:goHome')));
+        root?.querySelector('[data-action="refresh"]')?.addEventListener('click', () => { this.notice = ''; this.refresh(); });
+        root?.querySelector('[data-action="generate"]')?.addEventListener('click', () => {
+            this.generate(root).catch(error => {
+                this.sending = false;
+                this.notice = `任务请求失败：${error?.message || '请重试'}`;
+                this.draw();
+            });
+        });
     }
 
     resolveRole(name) {
@@ -308,12 +316,5 @@ export class SystemTasksApp {
         }, 80);
     }
 
-    onClick(event, root) {
-        const button = event.target.closest('button');
-        if (!button) return;
-        if (button.dataset.action === 'back') { window.dispatchEvent(new CustomEvent('phone:goHome')); return; }
-        if (button.dataset.action === 'refresh') { this.notice = ''; this.refresh(); return; }
-        if (button.dataset.action === 'generate') this.generate(root);
-    }
 }
 
