@@ -4149,7 +4149,13 @@ async loadContactsFromCharacter() {
             .replace(/\s+/g, '')
             .replace(/[（(][^（）()]*[）)]/g, '')
             .toLowerCase();
+        const existingContactKeys = new Set(this.getContacts().flatMap(contact => [
+            contact?.name,
+            contact?.nickname,
+            contact?.remark
+        ]).map(normalizeName).filter(Boolean));
         const candidates = directoryCharacters.filter(character => character?.name
+            && !existingContactKeys.has(normalizeName(character.name))
             && !this.findContactAliasConflict([character.name]));
         if (candidates.length === 0) {
             return {
@@ -4226,11 +4232,8 @@ async loadContactsFromCharacter() {
             });
             if (result?.created) addedCount++;
             const parsedGender = this._normalizeGenderValue(contact?.gender);
-            if (result?.contact && parsedGender !== 'unknown') {
-                const currentGender = this.getContactGender(result.contact.id || result.contact.name);
-                if (result.created || currentGender === 'unknown') {
-                    this.setContactGender(result.contact.id || result.contact.name, parsedGender);
-                }
+            if (result?.created && parsedGender !== 'unknown') {
+                this.setContactGender(result.contact.id || result.contact.name, parsedGender);
             }
         });
         
