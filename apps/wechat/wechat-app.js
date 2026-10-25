@@ -9320,7 +9320,7 @@ export class WechatApp {
                 confirmBtn.style.opacity = '0.7';
                 confirmBtn.style.cursor = 'not-allowed';
             }
-            this.phoneShell.showNotification('AI分析中', '正在生成联系人...', '⏳');
+            this.phoneShell.showNotification('正在整理联系人', '正在读取角色档案目录并补充联系人...', '⏳');
 
             try {
                 const result = await this.wechatData.loadContactsFromCharacter();
