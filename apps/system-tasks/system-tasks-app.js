@@ -49,12 +49,12 @@ function sourceFor(entries, name, type, dynamicComment) {
     if (type === 'dynamic') {
         const preferred = candidates.filter(entry => clean(entry.comment) === dynamicComment);
         if (preferred.length) return preferred;
-        return candidates.filter(entry => clean(entry.comment) === `动态-${name}` || /^\\[--角色档案开始--\\]/.test(entry.content || '')
+        return candidates.filter(entry => clean(entry.comment) === `动态-${name}` || /^\[--角色档案开始--\]/.test(entry.content || '')
             && parseFields(entry.content).some(field => field.label === '姓名' && clean(field.value) === name));
     }
     return candidates.filter(entry => clean(entry.comment) === name
         || parseFields(entry.content).some(field => field.label === '姓名' && clean(field.value) === name)
-            && !/^动态-/.test(entry.comment || '') && !/^\\[--角色档案开始--\\]/.test(entry.content || ''));
+            && !/^动态-/.test(entry.comment || '') && !/^\[--角色档案开始--\]/.test(entry.content || ''));
 }
 
 function flattenEntries(books) {
