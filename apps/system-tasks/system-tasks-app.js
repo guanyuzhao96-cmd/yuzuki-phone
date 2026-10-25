@@ -44,17 +44,27 @@ function parseLocalDirectories(books) {
     return result;
 }
 
+function entryHasRoleName(entry, name) {
+    return parseFields(entry.content).some(field => field.label === '姓名' && clean(field.value) === name);
+}
+
+function isDynamicEntry(entry) {
+    const type = parseFields(entry.content).find(field => field.label === '档案类型')?.value || '';
+    return /^动态-/.test(entry.comment || '')
+        || /^\[--角色档案开始--\]/.test(entry.content || '')
+        || /动态/.test(type);
+}
+
 function sourceFor(entries, name, type, dynamicComment) {
     const candidates = entryList({ entries }).filter(entry => String(entry.content || '').trim());
     if (type === 'dynamic') {
         const preferred = candidates.filter(entry => clean(entry.comment) === dynamicComment);
         if (preferred.length) return preferred;
-        return candidates.filter(entry => clean(entry.comment) === `动态-${name}` || /^\[--角色档案开始--\]/.test(entry.content || '')
-            && parseFields(entry.content).some(field => field.label === '姓名' && clean(field.value) === name));
+        return candidates.filter(entry => clean(entry.comment) === '动态-' + name
+            || isDynamicEntry(entry) && entryHasRoleName(entry, name));
     }
-    return candidates.filter(entry => clean(entry.comment) === name
-        || parseFields(entry.content).some(field => field.label === '姓名' && clean(field.value) === name)
-            && !/^动态-/.test(entry.comment || '') && !/^\[--角色档案开始--\]/.test(entry.content || ''));
+    return candidates.filter(entry => !isDynamicEntry(entry)
+        && (clean(entry.comment) === name || entryHasRoleName(entry, name)));
 }
 
 function flattenEntries(books) {
@@ -199,14 +209,14 @@ export class SystemTasksApp {
         this.errors = [];
         this.draw();
         try {
-            // Load every available worldbook as a searchable dossier catalog. A CWB
-            // directory can improve mapping, but it is optional and never gates use.
-            const availableBooks = await this.manager.fetchAllAvailableWorldBooks();
-            const results = await Promise.allSettled(availableBooks.map(book => this.manager.readDossierWorldbook(book.name)));
-            const books = results.filter(result => result.status === 'fulfilled').map(result => result.value);
             const ctx = this.context();
             const mvuApi = ctx.Mvu || window.Mvu || window.parent?.Mvu;
             const snapshot = latestMvuSnapshot(typeof mvuApi?.getMvuData === 'function' ? args => mvuApi.getMvuData(args) : null, ctx.chat || []);
+            let availableBooks = [];
+            try { availableBooks = await this.manager.fetchAllAvailableWorldBooks(); }
+            catch (error) { this.errors.push(`全局角色档案列表读取失败：${error?.message || '读取失败'}`); }
+            const results = await Promise.allSettled(availableBooks.map(book => this.manager.readDossierWorldbook(book.name)));
+            const books = results.filter(result => result.status === 'fulfilled').map(result => result.value);
             if (token !== this.sequence || scope !== this.scope() || !this.active) return;
             this.books = books;
             this.entries = flattenEntries(books);
@@ -216,8 +226,8 @@ export class SystemTasksApp {
                 ...(Array.isArray(ctx.chatMetadata?.world_info) ? ctx.chatMetadata.world_info : [ctx.chatMetadata?.world_info]),
                 card?.data?.extensions?.world
             ].filter(Boolean).map(clean);
-            this.errors = results.flatMap((result, index) => result.status === 'rejected'
-                ? [`${availableBooks[index]?.name || '世界书'}：${result.reason?.message || '读取失败'}`] : []);
+            this.errors.push(...results.flatMap((result, index) => result.status === 'rejected'
+                ? [`${availableBooks[index]?.name || '世界书'}：${result.reason?.message || '读取失败'}`] : []));
             const names = namesFromSources(this.entries, snapshot?.data);
             this.characters = names.map(name => this.resolveRole(name)).filter(result => !result.error).map(result => result.role);
             this.tasks = taskRows(snapshot?.data);
