@@ -38,7 +38,7 @@ import {
 } from './apps/mofo/mofo-renderer.js';
 
 const ST_PHONE_BASE_URL = new URL('./', import.meta.url).href;
-const ST_PHONE_VERSION = '1.6.25';
+const ST_PHONE_VERSION = '1.6.26';
 const ST_PHONE_CSS_REVISION = '20261020-ios-complete-theme-v3';
 const ST_PHONE_APP_SWIPE_REVISION = '20261002-wechat-chat-return';
 const ST_PHONE_ALBUM_MODULE_REVISION = '20261006-story-image-outside-close';
@@ -11277,7 +11277,7 @@ if (window.GGP_Loaded) {
 
                 // 打开对应的APP
                 if (appId === 'dossier') {
-                    import('./apps/dossier/dossier-app.js').then(async ({ DossierApp }) => {
+                    import(`./apps/dossier/dossier-app.js?v=${ST_PHONE_VERSION}&r=20261025-character-dossier-gallery`).then(async ({ DossierApp }) => {
                         if (currentApp !== 'dossier') return;
                         if (!window.VirtualPhone.dossierApp) window.VirtualPhone.dossierApp = new DossierApp(phoneShell, storage);
                         await window.VirtualPhone.dossierApp.render();
