@@ -38,7 +38,7 @@ import {
 } from './apps/mofo/mofo-renderer.js';
 
 const ST_PHONE_BASE_URL = new URL('./', import.meta.url).href;
-const ST_PHONE_VERSION = '1.6.9';
+const ST_PHONE_VERSION = '1.6.15';
 const ST_PHONE_CSS_REVISION = '20261020-ios-complete-theme-v3';
 const ST_PHONE_APP_SWIPE_REVISION = '20261002-wechat-chat-return';
 const ST_PHONE_ALBUM_MODULE_REVISION = '20261006-story-image-outside-close';
@@ -1467,7 +1467,7 @@ if (window.GGP_Loaded) {
             imageGenerationManagerModule,
             worldbookManagerModule
         ] = await Promise.all([
-            import('./config/apps.js?v=1.6.9'),
+            import('./config/apps.js?v=1.6.15'),
             import('./config/storage.js?v=20261006-story-upload-console-cleanup'),
             import('./config/api-manager.js?v=20261009-unified-sse-parser'),
             import('./config/time-manager.js'),    // 👈 取消懒加载
@@ -10943,6 +10943,7 @@ if (window.GGP_Loaded) {
                 home: null,
                 wechatApp: null,
                 mofoApp: null,
+                campusForumApp: null,
                 cachedMofoData: null,
                 notify: showUnifiedPhoneNotification,
                 checkCalendarScheduleReminders: checkCalendarScheduleReminders,
@@ -11183,6 +11184,7 @@ if (window.GGP_Loaded) {
                         ['calendar', phone.calendarApp],
                         ['album', phone.albumApp],
                         ['mofo', phone.mofoApp],
+                        ['campus-forum', phone.campusForumApp],
                         ['settings', phone.settingsApp]
                     ];
                     appEntries.forEach(([appId, appInstance]) => {
@@ -11345,6 +11347,25 @@ if (window.GGP_Loaded) {
                         .catch(importError => {
                             console.error('❌ [调试] 导入 diary-app.js 失败:', importError);
                             phoneShell?.showNotification('错误', '日记模块加载失败', '❌');
+                        });
+                } else if (appId === 'campus-forum') {
+                    import(`./apps/campus-forum/campus-forum-app.js?v=${ST_PHONE_VERSION}&r=20261025-campus-forum`)
+                        .then(module => {
+                            if (currentApp !== 'campus-forum') return;
+                            try {
+                                if (!window.VirtualPhone.campusForumApp) {
+                                    window.VirtualPhone.campusForumApp = new module.CampusForumApp(phoneShell, storage);
+                                }
+                                window.VirtualPhone.campusForumApp.render();
+                            } catch (initError) {
+                                console.error('❌ 校园论坛初始化失败:', initError);
+                                phoneShell?.showNotification('错误', '校园论坛加载失败', '❌');
+                            }
+                        })
+                        .catch(importError => {
+                            if (currentApp !== 'campus-forum') return;
+                            console.error('❌ 导入 campus-forum-app.js 失败:', importError);
+                            phoneShell?.showNotification('错误', '校园论坛模块加载失败', '❌');
                         });
                 } else if (appId === 'phone') {
                     import(`./apps/phone/phone-app.js?v=${ST_PHONE_VERSION}&r=${ST_PHONE_APP_SWIPE_REVISION}`)
@@ -11695,6 +11716,8 @@ if (window.GGP_Loaded) {
                         window.VirtualPhone.mofoApp.clearCache();
                         window.VirtualPhone.mofoApp = null;
                     }
+                    window.VirtualPhone.campusForumApp?.destroy?.();
+                    window.VirtualPhone.campusForumApp = null;
                     window.VirtualPhone.albumApp = null;
                     window.VirtualPhone.calendarApp = null;
                     if (window.VirtualPhone.musicApp) {
@@ -11772,6 +11795,8 @@ if (window.GGP_Loaded) {
                         window.VirtualPhone.mofoApp.clearCache();
                         window.VirtualPhone.mofoApp = null;
                     }
+                    window.VirtualPhone.campusForumApp?.destroy?.();
+                    window.VirtualPhone.campusForumApp = null;
                     if (window.VirtualPhone.musicApp) {
                         window.VirtualPhone.musicApp.clearCache();
                         window.VirtualPhone.musicApp.view.destroyFloatingWidget();
