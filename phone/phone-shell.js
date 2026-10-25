@@ -244,6 +244,7 @@ export class PhoneShell {
             const scrollableAreas =[
                 '.home-dashboard', '.home-app-cluster-scroll',
                 '.yzp-dossier main',
+                '.campus-forum-feed', '.campus-forum-post-detail-scroll', '.campus-forum-settings-page',
                 '.chat-messages', '#voice-chat-messages', '#video-chat-messages',
                 '.quick-reply-panel', '.quick-time-column', '.emoji-panel', '.emoji-scroll',
                 '.wechat-content', '.wechat-profile-edit-content', '.wechat-wallet-ledger-scroll', '.app-body', '.settings-app', '.app-name-custom-list', '.moments-list',
