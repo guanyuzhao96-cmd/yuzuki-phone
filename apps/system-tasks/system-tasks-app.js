@@ -45,7 +45,9 @@ function parseLocalDirectories(books) {
 }
 
 function sourceFor(entries, name, type, dynamicComment) {
-    const candidates = entryList({ entries }).filter(entry => entry?.enabled !== false && String(entry.content || '').trim());
+    // Dossier lookup is a catalog read, not worldbook prompt activation. Keep
+    // entries that have content even when the worldbook/entry is not active.
+    const candidates = entryList({ entries }).filter(entry => String(entry.content || '').trim());
     if (type === 'dynamic') {
         const preferred = candidates.filter(entry => clean(entry.comment) === dynamicComment);
         if (preferred.length) return preferred;
@@ -153,7 +155,14 @@ export class SystemTasksApp {
         this.errors = [];
         this.draw();
         try {
-            const initialNames = await this.manager.getDossierDefaultBooks();
+            const defaultNames = await this.manager.getDossierDefaultBooks();
+            // Include every worldbook in SillyTavern's catalog, not only books
+            // attached to or activated for the current chat/card.
+            const availableBooks = await this.manager.fetchAllAvailableWorldBooks();
+            const initialNames = [...new Set([
+                ...defaultNames,
+                ...availableBooks.map(book => book.name).filter(Boolean)
+            ])];
             const initialResults = await Promise.allSettled(initialNames.map(name => this.manager.readDossierWorldbook(name)));
             const initialBooks = initialResults.filter(result => result.status === 'fulfilled').map(result => result.value);
             const directories = [...parseCentralDirectory(initialBooks), ...parseLocalDirectories(initialBooks)];
