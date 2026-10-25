@@ -11,6 +11,7 @@ const FORUM_SYSTEM_PROMPT = `你是校园论坛内容生成器。严格遵守以
 5. 只返回如下结构：{"帖子":[{"板块":"恋爱八卦","标题":"","作者":"","日期":"YYYY-MM-DD","正文":"","评论":[{"作者":"","内容":""}]}],"热点":[{"source_event_index":1,"日期":"YYYY-MM-DD","事件":"","依据":"","热度":"低|中|高"}]}`;
 
 const PRIVATE_EVENT_PATTERN = /私密|私下|秘密|保密|隐瞒|未公开|卧室|床上|私聊|读心|偷拍|胁迫|被迫|暗中|单独约会|秘密关系|性关系|性行为|裸露/;
+const PUBLIC_EVENT_LEAK_PATTERN = /秘密关系|私下.{0,4}(?:关系|约会|见面|交往|接触|行为)|未公开(?:的)?(?:关系|身份|事件|信息)|卧室|床上|读心(?:到|结果|内容)|(?:偷拍到|偷拍视频)|胁迫|被迫发生|性关系|性行为|裸露|裸照/;
 const DATE_PATTERN = /(\d{4})\s*(?:[-/.年])\s*(\d{1,2})\s*(?:[-/.月])\s*(\d{1,2})\s*日?/;
 
 function normalizeDateParts(value = '') {
@@ -131,18 +132,20 @@ function responseToText(value) {
 function normalizePost(post = {}, sectionName = '', fallbackDate = '') {
     const title = safeText(post.title || post.标题, 80);
     const author = safeText(post.author || post.作者, 40) || '匿名同学';
-    const content = safeText(post.content || post.body || post.正文, 600);
+    const content = safeText(post.content || post.body || post.正文 || post.内容, 600);
     if (!title || !content) return null;
     const commentsRaw = Array.isArray(post.comments) ? post.comments : (Array.isArray(post.评论) ? post.评论 : []);
-    const comments = commentsRaw.slice(0, 4).map(comment => ({
-        author: safeText(comment?.author || comment?.作者, 40) || '路过同学',
-        content: safeText(comment?.content || comment?.内容, 300)
-    })).filter(comment => comment.content);
+    const comments = commentsRaw.slice(0, 4).map(comment => typeof comment === 'string'
+        ? { author: '路过同学', content: safeText(comment, 300) }
+        : {
+            author: safeText(comment?.author || comment?.作者, 40) || '路过同学',
+            content: safeText(comment?.content || comment?.内容, 300)
+        }).filter(comment => comment.content);
     return {
         section: sectionName,
         title,
         author,
-        date: getDateText(post.date || post.日期) || getDateText(fallbackDate),
+        date: getDateText(post.date || post.日期 || post.发布时间 || post.publishTime) || getDateText(fallbackDate),
         content,
         comments
     };
@@ -363,11 +366,12 @@ export class CampusForumData {
             try {
                 const candidate = parseJsonPayload(rawText);
                 const candidatePayload = candidate?.论坛 && typeof candidate.论坛 === 'object' ? candidate.论坛 : candidate;
-                const candidatePosts = candidatePayload?.帖子 || candidatePayload?.posts || candidatePayload?.forum_view;
+                const candidatePosts = candidatePayload?.帖子 || candidatePayload?.帖子列表 || candidatePayload?.posts
+                    || candidatePayload?.forumPosts || candidatePayload?.forum_view;
                 if (!Array.isArray(candidatePosts)) throw new Error('论坛生成结果缺少帖子列表');
                 const sectionCounts = Object.fromEntries(sections.map(section => [section, 0]));
                 candidatePosts.forEach(post => {
-                    const section = safeText(post?.板块 || post?.section, 24);
+                    const section = safeText(post?.板块 || post?.section || post?.栏目 || post?.category, 24);
                     if (Object.prototype.hasOwnProperty.call(sectionCounts, section)) sectionCounts[section] += 1;
                 });
                 const missing = sections.filter(section => sectionCounts[section] < 3);
@@ -383,14 +387,14 @@ export class CampusForumData {
             throw new Error(`${parseError?.message || '论坛 JSON 解析失败'}；已自动重试一次。模型返回：${preview || '（空内容）'}`);
         }
         const payload = parsed?.论坛 && typeof parsed.论坛 === 'object' ? parsed.论坛 : parsed;
-        const rawPosts = payload?.帖子 || payload?.posts || payload?.forum_view || [];
+        const rawPosts = payload?.帖子 || payload?.帖子列表 || payload?.posts || payload?.forumPosts || payload?.forum_view || [];
         if (!Array.isArray(rawPosts)) throw new Error('论坛生成结果缺少帖子列表');
         const postsBySection = Object.fromEntries(sections.map(section => [section, []]));
         rawPosts.slice(0, 35).forEach(rawPost => {
-            const section = safeText(rawPost?.板块 || rawPost?.section, 24);
+            const section = safeText(rawPost?.板块 || rawPost?.section || rawPost?.栏目 || rawPost?.category, 24);
             if (!postsBySection[section] || postsBySection[section].length >= 5) return;
             const post = normalizePost(rawPost, section, storyDate);
-            if (!post || (section !== '暗线' && PRIVATE_EVENT_PATTERN.test(`${post.title}\n${post.content}\n${post.comments.map(item => item.content).join('\n')}`))) return;
+            if (!post || (section !== '暗线' && PUBLIC_EVENT_LEAK_PATTERN.test(`${post.title}\n${post.content}\n${post.comments.map(item => item.content).join('\n')}`))) return;
             const parsedDate = normalizeDateParts(post.date);
             const age = parsedDate && normalizeDateParts(storyDate) ? daysBetween(normalizeDateParts(storyDate).date, parsedDate.date) : 0;
             if (!parsedDate || parsedDate.iso > storyDate || age > 4) return;
