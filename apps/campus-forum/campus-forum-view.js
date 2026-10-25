@@ -6,6 +6,7 @@ export class CampusForumView {
         this._renderToken = 0;
         this._generating = false;
         this._notice = '';
+        this._failedResponse = '';
     }
 
     _escape(value = '') {
@@ -51,6 +52,11 @@ export class CampusForumView {
         const status = feed
             ? `<div class="campus-forum-source-note">剧情日期 ${this._escape(feed.storyDate || '未记录')} · 参考 ${this._escape((feed.sourceBooks || []).join('、') || '未选择世界书')}</div>`
             : '';
+        const noticeHtml = this._notice
+            ? (this._failedResponse
+                ? `<div class="campus-forum-error-note"><span>${this._escape(this._notice)}</span><button class="campus-forum-download-response" type="button"><i class="fa-solid fa-download"></i> 下载 AI 原始回复</button></div>`
+                : `<div class="campus-forum-source-note">${this._escape(this._notice)}</div>`)
+            : '';
 
         this._setContent(`
             <div class="campus-forum-app">
@@ -60,7 +66,7 @@ export class CampusForumView {
                     <button class="campus-forum-settings" type="button" aria-label="论坛设置"><i class="fa-solid fa-gear"></i></button>
                 </header>
                 <div class="campus-forum-toolbar"><div><b>校园热帖</b><span>${status}</span></div><button class="campus-forum-refresh" type="button" ${this._generating ? 'disabled' : ''}>${this._generating ? '<i class="fa-solid fa-spinner fa-spin"></i> 生成中' : '<i class="fa-solid fa-arrows-rotate"></i> 刷新论坛'}</button></div>
-                ${this._notice ? `<div class="campus-forum-source-note">${this._escape(this._notice)}</div>` : ''}
+                ${noticeHtml}
                 ${hotspotHtml}
                 <nav class="campus-forum-tabs" aria-label="论坛栏目">${tabs}</nav>
                 <main class="campus-forum-feed">${posts.length ? postCards : empty}</main>
@@ -71,6 +77,7 @@ export class CampusForumView {
         root?.querySelector('.campus-forum-back')?.addEventListener('click', () => window.dispatchEvent(new CustomEvent('phone:goHome')));
         root?.querySelector('.campus-forum-settings')?.addEventListener('click', () => this.renderSettings());
         root?.querySelector('.campus-forum-refresh')?.addEventListener('click', () => this.generate());
+        root?.querySelector('.campus-forum-download-response')?.addEventListener('click', () => this.downloadFailedResponse());
         root?.querySelectorAll('[data-forum-section]').forEach(button => button.addEventListener('click', () => {
             this.activeSection = String(button.dataset.forumSection || '恋爱八卦');
             this.render();
@@ -81,6 +88,7 @@ export class CampusForumView {
         if (this._generating) return;
         this._generating = true;
         this._notice = '';
+        this._failedResponse = '';
         this.render();
         try {
             const result = await this.app.data.generateFeed();
@@ -89,11 +97,32 @@ export class CampusForumView {
             this.app.phoneShell?.showNotification?.('校园论坛', `论坛已更新，共 ${postCount} 条帖子`, '🏫');
         } catch (error) {
             this._notice = error?.message || '论坛请求准备失败';
+            this._failedResponse = this.app.data.getLastAIResponse?.() || '';
             this.app.phoneShell?.showNotification?.('论坛请求失败', this._notice, '⚠️');
         } finally {
             this._generating = false;
             this.render();
         }
+    }
+
+    downloadFailedResponse() {
+        if (!this._failedResponse) return false;
+        const urlApi = window.URL || globalThis.URL;
+        if (typeof Blob !== 'function' || !urlApi?.createObjectURL) {
+            this.app.phoneShell?.showNotification?.('无法下载', '当前浏览器不支持文本文件下载。', '⚠️');
+            return false;
+        }
+        const blobUrl = urlApi.createObjectURL(new Blob([this._failedResponse], { type: 'text/plain;charset=utf-8' }));
+        const link = document.createElement('a');
+        const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+        link.href = blobUrl;
+        link.download = `校园论坛-AI原始回复-${stamp}.txt`;
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => urlApi.revokeObjectURL?.(blobUrl), 1000);
+        return true;
     }
 
     async renderSettings() {
