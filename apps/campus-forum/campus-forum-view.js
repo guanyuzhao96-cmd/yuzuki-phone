@@ -16,17 +16,6 @@ export class CampusForumView {
         })[char]);
     }
 
-    _renderPostImage(post) {
-        const imageUrl = String(post?.imageUrl || '').trim();
-        if (imageUrl && /^(?:https?:\/\/|\/backgrounds\/)/i.test(imageUrl)) {
-            return `<figure class="campus-forum-post-image"><img src="${this._escape(imageUrl)}" alt="${this._escape(post.imageDescription || '校园论坛配图')}" loading="lazy"></figure>`;
-        }
-        if (!post?.imagePrompt) return '';
-        const status = String(post.imageStatus || 'pending');
-        const label = status === 'loading' ? '正在生成配图…' : status === 'failed' ? '配图生成失败' : '正在准备配图…';
-        return `<div class="campus-forum-image-placeholder${status === 'failed' ? ' is-failed' : ''}"><i class="fa-regular fa-image"></i><span>${label}</span>${status === 'loading' ? '<i class="fa-solid fa-spinner fa-spin"></i>' : ''}</div>`;
-    }
-
     _setContent(html, viewId = 'campus-forum') {
         this.app.phoneShell.setContent(html, viewId);
     }
@@ -52,10 +41,8 @@ export class CampusForumView {
                     <div class="campus-forum-post-meta"><span>${this._escape(post.author || '匿名同学')}</span><time>${this._escape(post.date || feed?.storyDate || '')}</time></div>
                     <h2>${this._escape(post.title)}</h2>
                     <div class="campus-forum-post-body">${this._escape(post.content)}</div>
-                    ${this._renderPostImage(post)}
                     <div class="campus-forum-post-footer"><span><i class="fa-regular fa-comment"></i> ${Array.isArray(post.comments) ? post.comments.length : 0} 条评论</span><span>查看详情 <i class="fa-solid fa-chevron-right"></i></span></div>
                 </button>
-                ${post.imageStatus === 'failed' && post.imagePrompt ? `<button class="campus-forum-image-retry" type="button" data-forum-image-retry="${index}"><i class="fa-solid fa-rotate"></i> 重试配图</button>` : ''}
             </article>
         `).join('');
         const hotspotHtml = hotspots.length ? `
@@ -99,10 +86,6 @@ export class CampusForumView {
             const post = posts[Number(button.dataset.forumPostIndex)];
             if (post) this.openPost(post);
         }));
-        root?.querySelectorAll('[data-forum-image-retry]').forEach(button => button.addEventListener('click', () => {
-            const post = posts[Number(button.dataset.forumImageRetry)];
-            if (post) this.app.data.generatePostImage(post, feed);
-        }));
         root?.querySelectorAll('[data-forum-section]').forEach(button => button.addEventListener('click', () => {
             this.activeSection = String(button.dataset.forumSection || '恋爱八卦');
             this.render();
@@ -137,9 +120,7 @@ export class CampusForumView {
                         <div class="campus-forum-post-meta"><span>${this._escape(post.author || '匿名同学')}</span><time>${this._escape(post.date || '')}</time></div>
                         <h1>${this._escape(post.title || '未命名帖子')}</h1>
                         <div class="campus-forum-post-detail-body">${this._escape(post.content || '')}</div>
-                        ${this._renderPostImage(post)}
                     </article>
-                    ${post.imageStatus === 'failed' && post.imagePrompt ? `<button class="campus-forum-image-retry campus-forum-detail-image-retry" type="button"><i class="fa-solid fa-rotate"></i> 重试配图</button>` : ''}
                     <section class="campus-forum-detail-comments">
                         <div class="campus-forum-detail-comments-heading"><b>全部评论</b><span>${comments.length} 条</span></div>
                         <div class="campus-forum-comments">${commentHtml}</div>
@@ -153,9 +134,6 @@ export class CampusForumView {
             this.currentView = 'feed';
             this.render();
         });
-        root?.querySelector('.campus-forum-detail-image-retry')?.addEventListener('click', () => {
-            this.app.data.generatePostImage(post, this.app.data.getFeed());
-        });
     }
 
     async generate() {
@@ -167,7 +145,6 @@ export class CampusForumView {
         try {
             const result = await this.app.data.generateFeed();
             const postCount = Object.values(result.feed?.postsBySection || {}).reduce((sum, posts) => sum + posts.length, 0);
-            this.app.data.generateNecessaryImages(result.feed).catch(error => console.warn('[Campus Forum] 配图生成失败:', error));
             this._notice = `已生成 ${postCount} 条帖子${result.feed?.hotspots?.length ? `和 ${result.feed.hotspots.length} 条热点` : ''}，参考：${result.selectedBooks.join('、')}。`;
             this.app.phoneShell?.showNotification?.('校园论坛', `论坛已更新，共 ${postCount} 条帖子`, '🏫');
         } catch (error) {
