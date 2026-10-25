@@ -1,5 +1,5 @@
-import { CampusForumData } from './campus-forum-data.js?v=1.6.43';
-import { CampusForumView } from './campus-forum-view.js?v=1.6.43';
+import { CampusForumData } from './campus-forum-data.js?v=1.6.44';
+import { CampusForumView } from './campus-forum-view.js?v=1.6.44';
 
 export class CampusForumApp {
     constructor(phoneShell, storage) {
@@ -49,7 +49,7 @@ export class CampusForumApp {
         const link = document.createElement('link');
         link.id = 'campus-forum-css';
         link.rel = 'stylesheet';
-        link.href = new URL('./campus-forum.css?v=1.6.43', import.meta.url).href;
+        link.href = new URL('./campus-forum.css?v=1.6.44', import.meta.url).href;
         document.head.appendChild(link);
     }
 
@@ -69,6 +69,11 @@ export class CampusForumApp {
         if (!root) return false;
         if (event?.detail && typeof event.detail === 'object') event.detail.handled = true;
         if (this.view.currentView === 'settings') this.view.render();
+        else if (this.view.currentView === 'post') {
+            this.view._selectedPost = null;
+            this.view.currentView = 'feed';
+            this.view.render();
+        }
         else window.dispatchEvent(new CustomEvent('phone:goHome'));
         return true;
     }
