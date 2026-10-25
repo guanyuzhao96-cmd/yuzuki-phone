@@ -5,7 +5,7 @@
  * Copyright (c) yuzuki. All rights reserved.
  * ======================================================== */
 
-import { PHONE_CONFIG } from '../../config/apps.js?v=1.6.9';
+import { PHONE_CONFIG } from '../../config/apps.js?v=1.6.15';
 
 export const ALBUM_CSS_URL = new URL('./album.css?v=1.2.3&r=20261006-story-image-outside-close', import.meta.url).href;
 
