@@ -180,7 +180,10 @@ export class SystemTasksApp {
                 const key = JSON.stringify([row.name, row.book, row.dynamicComment]);
                 unique.set(key, { ...row, staticSources, dynamicSources });
             }
-            this.characters = [...unique.values()];
+            // The task picker should only expose characters with a usable dynamic
+            // dossier entry. Directory rows without a live `动态-角色名` source
+            // are not actionable for task generation and should stay out of the list.
+            this.characters = [...unique.values()].filter(row => row.dynamicSources.length > 0);
             this.mvu = snapshot;
             this.tasks = taskRows(snapshot?.data);
             this.readAt = new Date().toLocaleTimeString();
@@ -207,8 +210,11 @@ export class SystemTasksApp {
         const names = [...new Set((this.characters || []).map(row => row.name))].sort((a, b) => a.localeCompare(b, 'zh-CN'));
         const activeTask = (this.tasks || []).length > 0;
         const errors = this.errors.map(error => `<div class="notice">${escapeHtml(error)}</div>`).join('');
-        const sourceErrors = this.characters.length ? '' : '<div class="notice">未找到角色目录。请确认当前聊天已绑定包含 CWB 角色目录的世界书。</div>';
-        const status = this.loading ? '<small>正在读取世界书目录与最新 MVU…</small>' : `<small>已读取 ${this.books.length} 本关联世界书 · ${this.characters.length} 条角色目录记录 · ${escapeHtml(this.readAt || '')}</small>`;
+        const hasDirectories = (this.books || []).some(book => [...parseCentralDirectory([book]), ...parseLocalDirectories([book])].length > 0);
+        const sourceErrors = this.characters.length ? '' : hasDirectories
+            ? '<div class="notice">目录中没有找到启用且包含内容的动态角色档案（条目名称应为“动态-角色名”）。</div>'
+            : '<div class="notice">未找到角色目录。请确认当前聊天已绑定包含 CWB 角色目录的世界书。</div>';
+        const status = this.loading ? '<small>正在读取世界书目录与最新 MVU…</small>' : `<small>已读取 ${this.books.length} 本关联世界书 · ${this.characters.length} 条含动态资料的角色记录 · ${escapeHtml(this.readAt || '')}</small>`;
         this.phoneShell.setContent(`<style>${css}</style><div class="yzp-system-tasks"><header><button data-action="back" aria-label="返回">‹</button><strong>任务系统</strong><button class="secondary" data-action="refresh" ${this.loading ? 'disabled' : ''}>刷新</button></header><main>
             ${errors}${this.notice ? `<div class="notice">${escapeHtml(this.notice)}</div>` : ''}
             <h2>当前任务</h2>${taskList}
