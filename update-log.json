@@ -1,5 +1,12 @@
 {
     "versions": {
+        "1.6.20": {
+            "date": "2026-10-25",
+            "items": [
+                "【修复】版本更新检查改为读取 guanyuzhao96-cmd/yuzuki-phone 的 feat/read-only-character-dossier 分支。",
+                "【说明】默认分支仍是旧版；通过酒馆安装时需选择 feat/read-only-character-dossier。"
+            ]
+        },
         "1.6.19": {
             "date": "2026-10-25",
             "items": [
