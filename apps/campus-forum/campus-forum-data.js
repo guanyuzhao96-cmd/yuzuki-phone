@@ -3,7 +3,7 @@ import { latestMvuSnapshot } from '../dossier/dossier-data.js';
 export const CAMPUS_FORUM_APP_KEY = 'campus_forum';
 export const CAMPUS_FORUM_PUBLIC_SECTIONS = ['恋爱八卦', '校园女神', '偶遇目击', '表白寻人', '匿名树洞'];
 const GENERATED_FEED_KEY = 'campus_forum_generated_feed';
-const FORUM_SYSTEM_PROMPT = `你是校园论坛内容生成器。严格遵守以下规则，只返回一个 JSON 对象，不要解释、不要 Markdown：
+const FORUM_SYSTEM_PROMPT = `你是校园论坛内容生成器。严格遵守以下规则，只返回一个 JSON 对象，不要解释、不要 Markdown。回复的第一个字符必须是 {，最后一个字符必须是 }：
 1. 公开板块固定为：${CAMPUS_FORUM_PUBLIC_SECTIONS.join('、')}。每个公开板块生成 3–5 条帖子；每帖 1–2 条评论。只有暗线权限已解锁时，才可额外生成“暗线”帖子。
 2. 帖子只围绕给定剧情时间线和校园恋爱话题。不得补写主角行为、确认角色关系、编造时间线热点或把旧事写成刚发生。
 3. 事件发生不代表公众知情。公开热点或公开帖子只能采用“公开场合目击、本人公开发布、或剧情明确出现传播”的内容，并写出传播/目击依据。私下关系、秘密、未公开信息和读心结果不得进入公开板块。
@@ -310,7 +310,7 @@ export class CampusForumData {
                 { role: 'user', content: request, isPhoneMessage: true }
             ], {
                 appId: 'x',
-                max_tokens: Math.max(4000, configuredMaxTokens),
+                max_tokens: Math.max(8000, configuredMaxTokens),
                 stream: false,
                 signal: controller?.signal
             });
@@ -322,7 +322,30 @@ export class CampusForumData {
         }
         if (!response?.success) throw new Error(response?.error || '论坛内容生成失败');
         const rawText = String(response.summary || response.content || response.text || '').trim();
-        const parsed = parseJsonPayload(rawText);
+        let parsed;
+        try {
+            parsed = parseJsonPayload(rawText);
+        } catch (firstError) {
+            const retryResponse = await apiManager.callAI([
+                { role: 'system', name: 'SYSTEM (校园论坛规则)', content: FORUM_SYSTEM_PROMPT, isPhoneMessage: true },
+                { role: 'user', content: request + '\\n\\n上一次回复未能解析为 JSON。请重新生成完整结果，不要解释、不要 Markdown、不要代码围栏；只输出一个以 { 开始、以 } 结束的 JSON 对象，字段必须为“帖子”和“热点”。', isPhoneMessage: true }
+            ], {
+                appId: 'x',
+                max_tokens: Math.max(8000, configuredMaxTokens),
+                stream: false
+            });
+            if (!retryResponse?.success) throw new Error(retryResponse?.error || firstError.message);
+            const retryValue = retryResponse.summary || retryResponse.content || retryResponse.text || retryResponse.output_text || '';
+            const retryText = Array.isArray(retryValue)
+                ? retryValue.map(part => String(part?.text || part?.content || '')).join('\\n').trim()
+                : String(retryValue || '').trim();
+            try {
+                parsed = parseJsonPayload(retryText);
+            } catch (retryError) {
+                const preview = retryText.replace(/\\s+/g, ' ').slice(0, 180);
+                throw new Error(retryError.message + '；已自动重试一次。模型返回：' + (preview || '（空内容）'));
+            }
+        }
         const payload = parsed?.论坛 && typeof parsed.论坛 === 'object' ? parsed.论坛 : parsed;
         const rawPosts = payload?.帖子 || payload?.posts || payload?.forum_view || [];
         if (!Array.isArray(rawPosts)) throw new Error('论坛生成结果缺少帖子列表');
