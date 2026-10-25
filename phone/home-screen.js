@@ -10,7 +10,7 @@
  * Copyright (c) yuzuki. All rights reserved.
  * ======================================================== */
 // 主屏幕
-import { APPS, PHONE_CONFIG } from '../config/apps.js?v=1.6.9'; // 🔥🔥🔥 这一行必须改！
+import { APPS, PHONE_CONFIG } from '../config/apps.js?v=1.6.15'; // 🔥🔥🔥 这一行必须改！
 
 const CARD_LAYOUT_CUSTOM_CSS_KEY = 'phone-card-layout-custom-css';
 const CARD_LAYOUT_CUSTOM_STYLE_ID = 'phone-card-layout-custom-css-style';
