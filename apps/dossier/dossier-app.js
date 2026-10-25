@@ -168,12 +168,24 @@ export class DossierApp {
             ['堕落值', mvuValue('堕落值','depravity')],
             ['与主角关系', mvuValue('与主角的关系','与主角关系','relationship') || fieldValue(staticFields,['当前关系'])]
         ].filter(item=>item[1]!==undefined&&item[1]!==null&&item[1]!=='');
+        const identityText=fieldValue(staticFields,['身份']);
+        const professionMajor=fieldValue(staticFields,['职业/专业','职业','专业','专业方向'])||(()=>{
+            const parts=[];
+            const explicitMajor=identityText.match(/(?:主修|专业(?:是|为)?)\\s*([^，,。；;]+)/);
+            const study=identityText.match(/(?:潍坊学院)?([^，,。；;]{2,18}?)(?:大[一二三四]学生)/);
+            const role=identityText.match(/(?:担任|兼职|任职)(?:校)?([^，,。；;]+)/);
+            if(explicitMajor) parts.push(explicitMajor[1].trim());
+            else if(study) parts.push(study[1].replace(/^(?:潍坊学院)/,'')+'学生');
+            if(role) parts.push(role[1].replace(/的/g,''));
+            return parts.join(' · ')||identityText.slice(0,30);
+        })();
         const basics = [
             ['年龄',fieldValue(staticFields,['年龄'])],
             ['身高',fieldValue(staticFields,['身高'])],
             ['罩杯',fieldValue(staticFields,['罩杯'])],
             ['颜值分数',fieldValue(staticFields,['颜值','颜值分数'])],
-            ['角色等级',fieldValue(staticFields,['角色等级','等级'])]
+            ['角色等级',fieldValue(staticFields,['角色等级','等级'])],
+            ['职业 / 专业',professionMajor]
         ].filter(item=>item[1]).map(item=>'<div class="basic-item"><div class="basic-label">'+e(item[0])+'</div><div class="basic-value">'+e(item[0]==='角色等级'?String(item[1]).toUpperCase():item[1])+'</div></div>').join('');
         const privateFields=[];
         const appendPrivate=(label, aliases, preferred) => {
@@ -203,7 +215,7 @@ export class DossierApp {
         const relationshipSource=[...new Map(relations.map(r=>[r.source,r.source])).keys()].join('<br>')||'未找到角色关系汇总条目';
         const mvuSource=match.status==='matched'?'最新 MVU · roles['+e(match.id)+']':'未匹配到该角色的 MVU';
         const sourceTable='<details class="profile-group"><summary>数据来源</summary><div class="fields"><table class="source-table"><thead><tr><th>展示内容</th><th>数据来源</th></tr></thead><tbody>'+
-            '<tr><td>姓名、年龄、身高、罩杯、颜值、角色等级</td><td>'+sourceName(staticSource)+'</td></tr>'+
+            '<tr><td>姓名、年龄、身高、罩杯、颜值、角色等级、职业/专业</td><td>'+sourceName(staticSource)+'</td></tr>'+
             '<tr><td>好感度、性欲值、堕落值、与主角关系</td><td>'+mvuSource+(match.status==='matched'?' · 好感度 / 欲望值 / 堕落值 / 与主角的关系':'')+'</td></tr>'+
             '<tr><td>性经历人数、性经历人员、性癖、秘密</td><td>'+sourceName(dynamicSource)+'；缺项回退：'+sourceName(staticSource)+'</td></tr>'+
             '<tr><td>知道的事、未知的事、剧情</td><td>'+sourceName(dynamicSource)+'</td></tr>'+
