@@ -12,7 +12,7 @@ const css = `
 .yzp-dossier .profile-hero{padding:16px;margin:4px 0 10px;border:0;border-radius:18px;color:#fff;background:linear-gradient(135deg,#514a70,#85739b 58%,#c1a9b8);box-shadow:0 5px 16px rgba(47,36,67,.14)}
 .yzp-dossier .profile-kicker{font-size:10px;letter-spacing:2px;text-transform:uppercase;opacity:.78}.yzp-dossier .profile-hero h2{font-size:24px;letter-spacing:.2px;margin:4px 0}.yzp-dossier .profile-subtitle{margin:0;opacity:.88;font-size:12px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 .yzp-dossier .profile-badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}.yzp-dossier .profile-badge{padding:4px 9px;border-radius:20px;background:#ffffff28;border:1px solid #ffffff42;font-size:11px;line-height:1.35}
-.yzp-dossier .stat-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:8px 0 12px}.yzp-dossier .basic-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:8px 0}.yzp-dossier .basic-item{min-width:0;padding:7px;border-radius:10px;background:#fff;border:1px solid rgba(60,60,67,.1)}.yzp-dossier .basic-label{font-size:10px;color:#74717e}.yzp-dossier .basic-value{font-size:13px;font-weight:650;overflow-wrap:anywhere}.yzp-dossier .source-table{width:100%;border-collapse:collapse;font-size:11px}.yzp-dossier .source-table th,.yzp-dossier .source-table td{padding:6px 4px;border-bottom:1px solid rgba(60,60,67,.1);text-align:left;vertical-align:top;overflow-wrap:anywhere}.yzp-dossier .stat-card{padding:10px;border-radius:13px;background:#fff;border:1px solid rgba(60,60,67,.1);min-width:0}.yzp-dossier .stat-label{font-size:10px;color:#74717e}.yzp-dossier .stat-value{font-size:16px;font-weight:650;overflow-wrap:anywhere}.yzp-dossier .stat-card.accent{background:#f5effa;border-color:#e7dbef}.yzp-dossier .profile-group{margin:8px 0;padding:0;overflow:hidden}.yzp-dossier .profile-group summary{padding:11px 12px;display:flex;align-items:center;gap:7px}.yzp-dossier .profile-group summary:after{content:'＋';margin-left:auto;color:#77717e}.yzp-dossier .profile-group[open] summary:after{content:'－'}.yzp-dossier .group-count{font-size:10px;color:#7a7480;font-weight:400}.yzp-dossier .profile-group .fields{padding:0 12px 5px}.yzp-dossier .profile-group .field{display:grid;grid-template-columns:minmax(75px,31%) 1fr;gap:9px;padding:8px 0}.yzp-dossier .profile-group .field b{font-weight:500;color:#77717e}.yzp-dossier .catalog-heading{padding:12px 4px 8px}.yzp-dossier .catalog-kicker{font-size:10px;letter-spacing:2px;color:#78648e;font-weight:700}.yzp-dossier .catalog-heading h2{font-size:23px;margin:2px 0}.yzp-dossier .catalog-heading small{font-size:11px}.yzp-dossier .catalog-tools{display:flex;align-items:center;gap:8px;margin:8px 0;color:#74717e;font-size:11px}.yzp-dossier .catalog-tools span{flex:1}.yzp-dossier .catalog-tools select{width:auto;min-height:36px;padding:5px 8px;font-size:12px}.yzp-dossier .role-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.yzp-dossier .role-card{display:flex;align-items:center;gap:9px;text-align:left;width:100%;min-width:0;min-height:88px;padding:9px;border-radius:14px;background:#fff;border:1px solid rgba(60,60,67,.12);box-shadow:0 1px 2px rgba(0,0,0,.035)}.yzp-dossier .role-avatar{width:42px;height:52px;flex:0 0 42px;display:grid;place-items:center;border-radius:10px;color:white;font-size:21px;font-weight:650;background:linear-gradient(145deg,#89789e,#d0b3c1)}.yzp-dossier .role-info{min-width:0;flex:1}.yzp-dossier .role-name{display:block;font-size:14px;font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.yzp-dossier .role-subtitle{display:block;font-size:10px;color:#77717e;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px}.yzp-dossier .role-badges{display:flex;gap:4px;flex-wrap:wrap;margin-top:5px}.yzp-dossier .role-badge{font-size:9px;line-height:1.4;color:#6c5b7e;background:#f0ebf4;border-radius:10px;padding:2px 6px}.yzp-dossier .role-arrow{color:#aaa5b0;font-size:17px}.yzp-dossier .profile-tools{margin:10px 0}.yzp-dossier .source-meta{margin:4px 0 8px}.yzp-dossier .section-hint{padding:7px 12px 0;color:#77717e;font-size:10px}
+.yzp-dossier .stat-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:8px 0 12px}.yzp-dossier .basic-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:8px 0}.yzp-dossier .basic-item{min-width:0;padding:7px;border-radius:10px;background:#fff;border:1px solid rgba(60,60,67,.1)}.yzp-dossier .basic-label{font-size:10px;color:#74717e}.yzp-dossier .basic-value{font-size:13px;font-weight:650;overflow-wrap:anywhere}.yzp-dossier .source-table{width:100%;border-collapse:collapse;font-size:11px}.yzp-dossier .source-table th,.yzp-dossier .source-table td{padding:6px 4px;border-bottom:1px solid rgba(60,60,67,.1);text-align:left;vertical-align:top;overflow-wrap:anywhere}.yzp-dossier .stat-card{padding:10px;border-radius:13px;background:#fff;border:1px solid rgba(60,60,67,.1);min-width:0}.yzp-dossier .stat-label{font-size:10px;color:#74717e}.yzp-dossier .stat-value{font-size:16px;font-weight:650;overflow-wrap:anywhere}.yzp-dossier .stat-card.accent{background:#f5effa;border-color:#e7dbef}.yzp-dossier .profile-group{margin:8px 0;padding:0;overflow:hidden}.yzp-dossier .profile-group summary{padding:11px 12px;display:flex;align-items:center;gap:7px}.yzp-dossier .profile-group summary:after{content:'＋';margin-left:auto;color:#77717e}.yzp-dossier .profile-group[open] summary:after{content:'－'}.yzp-dossier .group-count{font-size:10px;color:#7a7480;font-weight:400}.yzp-dossier .profile-group .fields{padding:0 12px 5px}.yzp-dossier .profile-group .field{display:grid;grid-template-columns:minmax(75px,31%) 1fr;gap:9px;padding:8px 0}.yzp-dossier .profile-group .field b{font-weight:500;color:#77717e}.yzp-dossier .catalog-heading{padding:12px 4px 8px}.yzp-dossier .catalog-kicker{font-size:10px;letter-spacing:2px;color:#78648e;font-weight:700}.yzp-dossier .catalog-heading h2{font-size:23px;margin:2px 0}.yzp-dossier .catalog-heading small{font-size:11px}.yzp-dossier .catalog-tools{display:flex;align-items:center;gap:8px;margin:8px 0;color:#74717e;font-size:11px}.yzp-dossier .catalog-tools span{flex:1}.yzp-dossier .catalog-tools select{width:auto;min-height:36px;padding:5px 8px;font-size:12px}.yzp-dossier .role-grid{display:grid;grid-template-columns:1fr;gap:7px}.yzp-dossier .role-card{display:flex;align-items:center;gap:10px;text-align:left;width:100%;min-width:0;min-height:76px;padding:9px 10px;border-radius:14px;background:#fff;border:1px solid rgba(60,60,67,.12);box-shadow:0 1px 2px rgba(0,0,0,.035)}.yzp-dossier .role-avatar{position:relative;width:54px;height:54px;flex:0 0 54px;display:grid;place-items:center;overflow:hidden;border-radius:13px;color:white;font-size:21px;font-weight:650;background:linear-gradient(145deg,#89789e,#d0b3c1);cursor:pointer}.yzp-dossier .role-avatar img{width:100%;height:100%;object-fit:cover;display:block}.yzp-dossier .role-initial{display:grid;place-items:center;width:100%;height:100%}.yzp-dossier .avatar-edit{position:absolute;right:2px;bottom:2px;width:16px;height:16px;border-radius:50%;display:grid;place-items:center;background:#ffffffdd;color:#655273;font-size:12px;line-height:1}.yzp-dossier .role-info{min-width:0;flex:1}.yzp-dossier .role-name{display:block;font-size:14px;font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.yzp-dossier .role-badges{display:flex;gap:4px;flex-wrap:wrap;margin-top:5px}.yzp-dossier .role-badge{font-size:10px;line-height:1.4;color:#6c5b7e;background:#f0ebf4;border-radius:10px;padding:3px 6px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.yzp-dossier .role-arrow{color:#aaa5b0;font-size:17px}.yzp-dossier .profile-tools{margin:10px 0}.yzp-dossier .source-meta{margin:4px 0 8px}.yzp-dossier .section-hint{padding:7px 12px 0;color:#77717e;font-size:10px}
 @media(min-width:520px){.yzp-dossier .stat-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}`;
 
 export class DossierApp {
@@ -227,6 +227,7 @@ export class DossierApp {
         this.phoneShell.setContent(`<style>${css}</style><div class="yzp-dossier"><header><button data-action="back" aria-label="返回">‹</button><strong>角色档案</strong><button data-action="settings">来源</button><button data-action="refresh" ${this.loading ? 'disabled' : ''}>${this.loading ? '读取中' : '刷新'}</button></header><main>${this.errors.map(error => `<p class="warning">${e(error)}</p>`).join('')}${body}<small>只读 · 世界书与 MVU 的原始内容不会被修改</small></main></div>`, 'dossier-main');
         const root = document.querySelector('.phone-view-current .yzp-dossier') || document.querySelector('.yzp-dossier');
         if (!root) return;
+        root.querySelectorAll('[data-avatar-image]').forEach(img => { img.onerror = () => { const fallback = document.createElement('span'); fallback.className = 'role-initial'; fallback.textContent = img.alt.slice(0, 1); img.replaceWith(fallback); }; });
         root.onclick = event => this.onClick(event, root, role);
         const search = root.querySelector('[data-search]');
         if (search) search.oninput = event => { this.search = event.target.value; root.querySelector('[data-role-list]').innerHTML = this.roleList(); };
@@ -238,17 +239,56 @@ export class DossierApp {
         }; });
     }
 
+    chooseRoleAvatar(roleId) {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.onchange = () => {
+            const file = input.files?.[0];
+            if (!file) return;
+            if (!file.type.startsWith('image/')) { window.alert('请选择图片文件。'); return; }
+            const reader = new FileReader();
+            reader.onerror = () => window.alert('图片读取失败，请重试。');
+            reader.onload = () => {
+                const image = new Image();
+                image.onerror = () => window.alert('图片无法解码，请换一张图片。');
+                image.onload = () => {
+                    const max = 512, scale = Math.min(1, max / Math.max(image.width, image.height));
+                    const canvas = document.createElement('canvas');
+                    canvas.width = Math.max(1, Math.round(image.width * scale));
+                    canvas.height = Math.max(1, Math.round(image.height * scale));
+                    const ctx = canvas.getContext('2d');
+                    if (!ctx) { window.alert('当前浏览器无法处理图片。'); return; }
+                    ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+                    try {
+                        const avatar = canvas.toDataURL('image/jpeg', 0.82);
+                        const avatars = { ...(this.prefs().avatars || {}), [roleId]: avatar };
+                        this.save({ avatars });
+                        this.draw();
+                    } catch (_) { window.alert('头像保存失败，请尝试更小的图片。'); }
+                };
+                image.src = String(reader.result || '');
+            };
+            reader.readAsDataURL(file);
+        };
+        input.click();
+    }
+
     roleList() {
         const query = (this.search || '').trim().toLocaleLowerCase();
         const records = this.characters.map(role => {
             const fields = role.sources.flatMap(source => source.fields || []);
             const mvu = findMvuRole(this.mvu?.data, role.name);
             const findField = pattern => fields.find(field => pattern.test(field.label))?.value || '';
-            const occupation = findField(/职业|身份|职务/);
-            const relationship = mvu.role?.relationship ?? findField(/与主角关系|关系/);
-            const affection = mvu.role?.affection;
-            const searchText = [role.name, role.book, occupation, relationship, ...fields.map(field => `${field.label} ${field.value}`)].join(' ').toLocaleLowerCase();
-            return { role, mvu, occupation, relationship, affection, searchText };
+            const relationship = mvu.role?.['与主角的关系'] ?? mvu.role?.['与主角关系'] ?? mvu.role?.relationship ?? findField(/与主角关系|当前关系|关系/);
+            const affection = mvu.role?.['好感度'] ?? mvu.role?.affection;
+            const depravity = mvu.role?.['堕落值'] ?? mvu.role?.depravity;
+            const avatarField = fields.find(field => ['头像','头像URL','头像链接','角色头像','立绘'].includes(field.label))?.value || '';
+            const savedAvatar = this.prefs().avatars?.[role.id] || '';
+            const avatarCandidate = savedAvatar || avatarField;
+            const avatar = /^(https?:\/\/|data:image\/|\/)/i.test(String(avatarCandidate)) ? String(avatarCandidate) : '';
+            const searchText = [role.name, role.book, relationship, ...fields.map(field => `${field.label} ${field.value}`)].join(' ').toLocaleLowerCase();
+            return { role, mvu, relationship, affection, depravity, avatar, searchText };
         }).filter(record => !query || record.searchText.includes(query));
         if ((this.sort || 'name') === 'affection') records.sort((a, b) => {
             const av = Number(a.affection), bv = Number(b.affection);
@@ -258,13 +298,18 @@ export class DossierApp {
         });
         else records.sort((a, b) => a.role.name.localeCompare(b.role.name, 'zh-CN'));
         if (!records.length) return '<article class="muted">没有匹配的角色。</article>';
-        return `<div class="role-grid">${records.map(({ role, mvu, occupation, relationship, affection }) => {
-            const badges = ['动态档案', mvu.status === 'matched' ? 'MVU 已匹配' : '', relationship ? String(relationship) : '', affection !== undefined && affection !== null ? `好感 ${formatMvuValue(affection)}` : ''].filter(Boolean).slice(0, 3);
-            return `<button class="role-card" data-role="${e(role.id)}" aria-label="查看${e(role.name)}的完整档案"><span class="role-avatar" aria-hidden="true">${e(role.name.slice(0, 1))}</span><span class="role-info"><span class="role-name">${e(role.name)}</span><span class="role-subtitle">${e(occupation || role.book)}${this.characters.filter(other => other.name === role.name).length > 1 ? ' · 同名角色' : ''}</span><span class="role-badges">${badges.map(badge => `<span class="role-badge">${e(badge)}</span>`).join('')}</span></span><span class="role-arrow" aria-hidden="true">›</span></button>`;
+        return `<div class="role-grid">${records.map(({ role, relationship, affection, depravity, avatar }) => {
+            const image = avatar ? `<img data-avatar-image src="${e(avatar)}" alt="${e(role.name)}头像" loading="lazy">` : `<span class="role-initial">${e(role.name.slice(0, 1))}</span>`;
+            const badges = [
+                ['好感度', affection], ['堕落值', depravity], ['关系', relationship]
+            ].map(([label, value]) => `<span class="role-badge">${e(label)}：${e(value === undefined || value === null || value === '' ? '未记录' : String(value).replace(/\\s+/g, ' ').slice(0, 32))}</span>`).join('');
+            return `<button class="role-card" data-role="${e(role.id)}" aria-label="查看${e(role.name)}的完整档案"><span class="role-avatar" data-avatar-role="${e(role.id)}" title="点击头像设置或更换图片">${image}<span class="avatar-edit">＋</span></span><span class="role-info"><span class="role-name">${e(role.name)}</span><span class="role-badges">${badges}</span></span><span class="role-arrow" aria-hidden="true">›</span></button>`;
         }).join('')}</div>`;
     }
 
     onClick(event, root, role) {
+        const avatar = event.target.closest('[data-avatar-role]');
+        if (avatar) { event.preventDefault(); event.stopPropagation(); this.chooseRoleAvatar(avatar.dataset.avatarRole); return; }
         const button = event.target.closest('button');
         if (!button) return;
         if (button.dataset.role) { this.selected = button.dataset.role; this.draw(); return; }
