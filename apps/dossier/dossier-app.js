@@ -226,13 +226,15 @@ export class DossierApp {
         let body;
         if (this.settings) body = `<h2>目录索引</h2><p>自动关联当前聊天、角色及全局启用的世界书，通过目录中的完整姓名定位角色资料。</p><small>关联 ${this.books.length} 本世界书，识别 ${(this.indexes || []).length} 个目录，列出 ${this.characters.length} 个角色。</small>${(this.indexes || []).map(index => `<article><strong>${e(index.comment)}</strong><small>${e(index.book)} · UID ${e(index.uid)}</small><pre>${e(index.content)}</pre></article>`).join('')}${this.books.length ? `<details><summary>已检查的关联世界书</summary>${this.books.map(name => `<p>${e(name)}</p>`).join('')}</details>` : '<p>当前聊天没有可识别的关联世界书，请检查酒馆中的世界书绑定。</p>'}`;
         else if (role) body = this.details(role);
-        else body = `<input type="search" placeholder="搜索完整姓名" aria-label="搜索角色" value="${e(this.search || '')}" data-search><div data-role-list>${this.roleList()}</div>${!this.characters.length ? '<article>尚未在当前关联世界书中识别到 CWB 角色目录。可在“来源”查看自动读取状态；目录中的角色即使资料缺失也会列出。</article>' : ''}`;
+        else body = `<div class="catalog-heading"><span class="catalog-kicker">CHARACTER COLLECTION</span><h2>角色图鉴</h2><small>动态角色档案 · ${this.characters.length} 位</small></div><input type="search" placeholder="搜索姓名、职业、身份或关系" aria-label="搜索角色" value="${e(this.search || '')}" data-search><div class="catalog-tools"><span>按角色卡片浏览完整档案</span><select data-sort aria-label="角色排序"><option value="name">按姓名</option><option value="affection">按好感度</option></select></div><div data-role-list>${this.roleList()}</div>${!this.characters.length ? '<article>尚未发现包含动态资料的角色。可在“来源”查看目录与世界书读取状态。</article>' : ''}`;
         this.phoneShell.setContent(`<style>${css}</style><div class="yzp-dossier"><header><button data-action="back" aria-label="返回">‹</button><strong>角色档案</strong><button data-action="settings">来源</button><button data-action="refresh" ${this.loading ? 'disabled' : ''}>${this.loading ? '读取中' : '刷新'}</button></header><main>${this.errors.map(error => `<p class="warning">${e(error)}</p>`).join('')}${body}<small>只读 · 世界书与 MVU 的原始内容不会被修改</small></main></div>`, 'dossier-main');
         const root = document.querySelector('.phone-view-current .yzp-dossier') || document.querySelector('.yzp-dossier');
         if (!root) return;
         root.onclick = event => this.onClick(event, root, role);
         const search = root.querySelector('[data-search]');
         if (search) search.oninput = event => { this.search = event.target.value; root.querySelector('[data-role-list]').innerHTML = this.roleList(); };
+        const sort = root.querySelector('[data-sort]');
+        if (sort) { sort.value = this.sort || 'name'; sort.onchange = event => { this.sort = event.target.value; root.querySelector('[data-role-list]').innerHTML = this.roleList(); }; }
         root.querySelectorAll('[data-source]').forEach(select => { select.onchange = () => {
             const sources = { ...this.prefs().sources, [role.id]: { ...this.prefs().sources?.[role.id], [select.dataset.source]: select.value } };
             this.save({ sources }); this.draw();
@@ -240,7 +242,29 @@ export class DossierApp {
     }
 
     roleList() {
-        return this.characters.filter(c => c.name.includes(this.search || '')).map(c => `<button class="role" data-role="${e(c.id)}"><strong>${e(c.name)}</strong><small>${e(c.book)}${this.characters.filter(other => other.name === c.name).length > 1 ? ' · 存在同名角色' : ''}${!c.sources.length ? ' · 资料缺失' : ''}</small></button>`).join('');
+        const query = (this.search || '').trim().toLocaleLowerCase();
+        const records = this.characters.map(role => {
+            const fields = role.sources.flatMap(source => source.fields || []);
+            const mvu = findMvuRole(this.mvu?.data, role.name);
+            const findField = pattern => fields.find(field => pattern.test(field.label))?.value || '';
+            const occupation = findField(/职业|身份|职务/);
+            const relationship = mvu.role?.relationship ?? findField(/与主角关系|关系/);
+            const affection = mvu.role?.affection;
+            const searchText = [role.name, role.book, occupation, relationship, ...fields.map(field => `${field.label} ${field.value}`)].join(' ').toLocaleLowerCase();
+            return { role, mvu, occupation, relationship, affection, searchText };
+        }).filter(record => !query || record.searchText.includes(query));
+        if ((this.sort || 'name') === 'affection') records.sort((a, b) => {
+            const av = Number(a.affection), bv = Number(b.affection);
+            if (!Number.isFinite(av)) return Number.isFinite(bv) ? 1 : a.role.name.localeCompare(b.role.name, 'zh-CN');
+            if (!Number.isFinite(bv)) return -1;
+            return bv - av || a.role.name.localeCompare(b.role.name, 'zh-CN');
+        });
+        else records.sort((a, b) => a.role.name.localeCompare(b.role.name, 'zh-CN'));
+        if (!records.length) return '<article class="muted">没有匹配的角色。</article>';
+        return `<div class="role-grid">${records.map(({ role, mvu, occupation, relationship, affection }) => {
+            const badges = ['动态档案', mvu.status === 'matched' ? 'MVU 已匹配' : '', relationship ? String(relationship) : '', affection !== undefined && affection !== null ? `好感 ${formatMvuValue(affection)}` : ''].filter(Boolean).slice(0, 3);
+            return `<button class="role-card" data-role="${e(role.id)}" aria-label="查看${e(role.name)}的完整档案"><span class="role-avatar" aria-hidden="true">${e(role.name.slice(0, 1))}</span><span class="role-info"><span class="role-name">${e(role.name)}</span><span class="role-subtitle">${e(occupation || role.book)}${this.characters.filter(other => other.name === role.name).length > 1 ? ' · 同名角色' : ''}</span><span class="role-badges">${badges.map(badge => `<span class="role-badge">${e(badge)}</span>`).join('')}</span></span><span class="role-arrow" aria-hidden="true">›</span></button>`;
+        }).join('')}</div>`;
     }
 
     onClick(event, root, role) {
