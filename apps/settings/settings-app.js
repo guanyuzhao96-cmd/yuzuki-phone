@@ -14,7 +14,7 @@ import { ImageUploadManager } from './image-upload.js?v=20261006-story-upload-co
 import { ImageCropper } from './image-cropper.js';
 import { AlbumData } from '../album/album-data.js';
 import { AlbumImagePicker } from '../album/album-image-picker.js';
-import { DEFAULT_APP_ICONS, PHONE_CONFIG } from '../../config/apps.js?v=1.6.9';
+import { DEFAULT_APP_ICONS, PHONE_CONFIG } from '../../config/apps.js?v=1.6.15';
 import * as PhoneTagFilter from '../../config/tag-filter.js';
 import {
     PHONE_FLOATING_ENTRY_DEFAULT_STYLE,
