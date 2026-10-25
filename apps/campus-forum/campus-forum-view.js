@@ -5,6 +5,7 @@ export class CampusForumView {
         this.activeSection = '恋爱八卦';
         this._renderToken = 0;
         this._generating = false;
+        this._autoGenerateAttempted = false;
     }
 
     _escape(value = '') {
@@ -73,6 +74,10 @@ export class CampusForumView {
             this.activeSection = String(button.dataset.forumSection || '恋爱八卦');
             this.render();
         }));
+        if (!feed && this.app.data.getSelectedWorldbookIds().length > 0 && !this._autoGenerateAttempted) {
+            this._autoGenerateAttempted = true;
+            setTimeout(() => this.generate(), 0);
+        }
     }
 
     async generate() {
