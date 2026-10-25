@@ -9282,9 +9282,9 @@ export class WechatApp {
                     <div style="width: 60px; height: 60px; border-radius: 50%; background: rgba(255,255,255,0.6); backdrop-filter: blur(10px); border: 1px solid rgba(0,0,0,0.1); margin: 0 auto 20px; display: flex; align-items: center; justify-content: center;">
                         <i class="fa-solid fa-robot" style="font-size: 28px; color: #666;"></i>
                     </div>
-                    <div style="font-size: 16px; font-weight: 500; color: #000; margin-bottom: 8px;">使用AI生成联系人</div>
+                    <div style="font-size: 16px; font-weight: 500; color: #000; margin-bottom: 8px;">从角色档案目录补充联系人</div>
                     <div style="font-size: 12px; color: #999; margin-bottom: 24px; line-height: 1.5;">
-                        将使用AI分析当前角色卡和聊天记录，智能生成联系人。
+                        按角色图鉴的 CWB 目录检索角色及静态/动态资料，只添加通讯录中尚未收录的角色；已有联系人和聊天记录会保留。
                     </div>
 
                     <button id="confirm-load" style="
@@ -9310,7 +9310,6 @@ export class WechatApp {
         });
 
         document.getElementById('confirm-load')?.addEventListener('click', async () => {
-            const shouldClear = confirm('智能加载联系人前，是否先清空当前微信里的所有联系人、群聊和聊天记录？\n\n点击“确定”会先清空再生成，避免重复联系人/群聊；点击“取消”则保留现有数据并继续追加补全。');
             const confirmBtn = document.getElementById('confirm-load');
             if (confirmBtn?.dataset?.loading === '1') return;
             document.getElementById('wechat-contact-generation-error-modal')?.remove();
@@ -9324,10 +9323,6 @@ export class WechatApp {
             this.phoneShell.showNotification('AI分析中', '正在生成联系人...', '⏳');
 
             try {
-                if (shouldClear) {
-                    this.wechatData.clearContactsAndGroupsForSmartLoad?.();
-                }
-
                 const result = await this.wechatData.loadContactsFromCharacter();
 
                 if (result.success) {
