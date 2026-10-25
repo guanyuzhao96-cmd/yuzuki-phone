@@ -1,9 +1,9 @@
 {
     "display_name": "柚月手机·角色档案与系统模块版",
     "name": "yuzuki-phone",
-    "description": "角色档案精简展示姓名、基础数值、MVU关系、隐私档案、角色已知/未知信息、关系汇总与剧情。",
+    "description": "角色档案列表以头像卡片展示姓名、好感度、堕落值和与主角关系，并支持为角色设置头像。",
     "author": "yuzuki",
-    "version": "1.6.30",
+    "version": "1.6.31",
     "loading_order": 200,
     "requires": [],
     "optional": [],
