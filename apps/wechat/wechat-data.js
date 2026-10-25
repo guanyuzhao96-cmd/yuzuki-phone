@@ -11,6 +11,8 @@
  * ======================================================== */
 // 微信数据管理
 import { GlobalSocialStore } from '../../config/global-social-store.js';
+import { WorldbookManager } from '../../config/worldbook-manager.js';
+import { buildCharacters } from '../dossier/dossier-data.js';
 import { parseImagePromptDescriptionPair, readBalancedImagePromptGroup } from '../../config/image-prompt-format.js';
 import { parseWechatVoiceContent } from './voice-text.js';
 import {
@@ -4140,8 +4142,27 @@ async loadContactsFromCharacter() {
         }
         
         
-        // ✅ 构建AI消息
-        const messages = await this.buildContactPrompt(context);
+        // 与角色档案使用相同的来源发现和 CWB 目录索引，仅候选目录内存在静态/动态资料的角色。
+        const directoryCharacters = await this.getDossierContactCharacters();
+        const normalizeName = (raw) => String(raw || '')
+            .trim()
+            .replace(/\s+/g, '')
+            .replace(/[（(][^（）()]*[）)]/g, '')
+            .toLowerCase();
+        const candidates = directoryCharacters.filter(character => character?.name
+            && !this.findContactAliasConflict([character.name]));
+        if (candidates.length === 0) {
+            return {
+                success: true,
+                count: 0,
+                message: directoryCharacters.length
+                    ? '目录中的角色都已在微信通讯录中，无需新增。'
+                    : '当前可读取的世界书目录中没有找到带静态或动态资料的角色，未生成联系人。'
+            };
+        }
+
+        // ✅ 构建仅含本次缺失角色及其档案内容的AI消息
+        const messages = await this.buildContactPrompt(context, { contactCandidates: candidates });
         
         
         // ✅ 调用AI
@@ -4158,15 +4179,12 @@ async loadContactsFromCharacter() {
         if (!generatedData || !generatedData.contacts) {
             throw new Error('AI返回的数据格式错误');
         }
-        
-        // 🔒 幂等保护：已存在的好友/群绝不覆盖，仅新增不存在的
-        const normalizeName = (raw) => {
-            return String(raw || '')
-                .trim()
-                .replace(/\s+/g, '')
-                .replace(/[（(][^（）()]*[）)]/g, '') // 忽略尾部关系备注
-                .toLowerCase();
-        };
+
+        // 目录白名单保护：不接纳 AI 自行补造或目录中没有的联系人。
+        const candidateKeys = new Set(candidates.map(character => normalizeName(character.name)));
+        generatedData.contacts = (Array.isArray(generatedData.contacts) ? generatedData.contacts : [])
+            .filter(contact => candidateKeys.has(normalizeName(contact?.name)));
+
 
         // ✅ 添加联系人（仅补全缺失，不覆盖已有）
         let addedCount = 0;
@@ -4301,8 +4319,8 @@ async loadContactsFromCharacter() {
             });
         }
 
-        // 🔥 保存初始时间（如果有）
-        if (generatedData.initialTime) {
+        // 增量更新不重置已保存的剧情初始时间。
+        if (generatedData.initialTime && !this.storage.get('story-initial-time', null)) {
             this.storage.set('story-initial-time', JSON.stringify(generatedData.initialTime), true);
         }
 
@@ -4330,8 +4348,43 @@ async loadContactsFromCharacter() {
     }
 }
     
+// 复用角色档案的世界书范围、目录检索和静态/动态条目关联。
+async getDossierContactCharacters() {
+    const manager = window.VirtualPhone?.worldbookManager || new WorldbookManager(this.storage);
+    if (typeof manager.getDossierDefaultBooks !== 'function' || typeof manager.readDossierWorldbook !== 'function') {
+        throw new Error('角色档案目录检索器未就绪，无法安全生成联系人');
+    }
+    const names = await manager.getDossierDefaultBooks();
+    if (!Array.isArray(names) || names.length === 0) return [];
+    const results = await Promise.allSettled(names.map(name => manager.readDossierWorldbook(name)));
+    const loaded = results.filter(result => result.status === 'fulfilled').map(result => result.value);
+    if (loaded.length === 0) {
+        const reason = results.find(result => result.status === 'rejected')?.reason;
+        throw new Error(reason?.message || '未能读取角色档案使用的世界书');
+    }
+
+    const byName = new Map();
+    buildCharacters(loaded).forEach(character => {
+        if (!character?.name || !Array.isArray(character.sources) || character.sources.length === 0) return;
+        const key = String(character.name).trim().replace(/\s+/g, '').toLowerCase();
+        const previous = byName.get(key);
+        if (previous) {
+            const sourceKeys = new Set(previous.sources.map(source => `${source.book}\u0000${source.comment}\u0000${source.content}`));
+            previous.sources.push(...character.sources.filter(source => {
+                const sourceKey = `${source.book}\u0000${source.comment}\u0000${source.content}`;
+                if (sourceKeys.has(sourceKey)) return false;
+                sourceKeys.add(sourceKey);
+                return true;
+            }));
+        } else {
+            byName.set(key, { ...character, sources: [...character.sources] });
+        }
+    });
+    return Array.from(byName.values());
+}
+
 // 🔧 构建联系人生成提示词（重构版）
-async buildContactPrompt(context) {
+async buildContactPrompt(context, options = {}) {
     const charName = context?.name2 || context?.name || '角色';
     const lobbySelection = this._buildLobbyLinkSelection(context);
     const lobbyUsers = this._resolveLobbySelectedUsers(lobbySelection);
@@ -4406,6 +4459,22 @@ async buildContactPrompt(context) {
 
     await window.VirtualPhone?.worldbookManager?.appendWorldbookMessages?.(messages, 'wechat');
 
+    const contactCandidates = Array.isArray(options.contactCandidates) ? options.contactCandidates : [];
+    const existingContacts = this.getContacts().map(contact => contact?.name).filter(Boolean);
+    const candidateNames = contactCandidates.map(character => character.name).filter(Boolean);
+    const directoryRoleDetails = contactCandidates.map(character => {
+        const sources = character.sources.map(source => {
+            const type = source.type === 'dynamic' ? '动态档案' : '静态档案';
+            const content = this._truncateAiContextText(source.content, 700);
+            return `  【${type}｜${source.book}】\n${content}`;
+        }).join('\n');
+        return `【${character.name}】\n${sources}`;
+    }).join('\n\n').slice(0, 24000);
+    messages.push({
+        role: 'system',
+        content: `【角色档案目录检索结果】\n本次只允许为以下目录角色生成微信联系人。候选名单来自角色档案使用的 CWB 目录，已读取匹配到的静态/动态档案。\n候选角色全名：${candidateNames.join('、')}\n对应档案摘录：\n${directoryRoleDetails}\n\n当前微信联系人（不得重复添加）：${existingContacts.join('、') || '暂无'}\n硬性规则：姓名必须与候选角色全名一致；不得新增名单外人物、不得把群成员扩展成联系人、不得改写已有联系人。`
+    });
+
     const charCardParts = [
         `【当前主角角色卡】`,
         `姓名：${charName}`,
@@ -4468,7 +4537,7 @@ async buildContactPrompt(context) {
         : '';
     messages.push({
         role: 'user',
-        content: `${loadContactsPrompt}${lobbyHardRule}`
+        content: `${loadContactsPrompt}${lobbyHardRule}\n\n【本次增量规则】仅从上方角色档案目录候选名单中，为当前微信通讯录尚未收录的角色生成联系人；名单外角色必须省略。候选角色少于提示词要求数量时按实际数量生成，不得补造角色。只新增，不清空或覆盖已有联系人、聊天记录和群聊。`
     });
     return messages;
 }
