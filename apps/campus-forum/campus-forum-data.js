@@ -92,7 +92,11 @@ function isPubliclyDiscussable(event = '') {
 }
 
 function parseJsonPayload(rawText = '') {
-    let source = String(rawText || '').replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+    let source = String(rawText || '')
+        .replace(/<think>[\s\S]*?<\/think>/gi, '')
+        .replace(/<think>[\s\S]*$/gi, '')
+        .replace(/^[\s\S]*?<\/think>/i, '')
+        .trim();
     const fenced = source.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
     if (fenced) source = fenced[1].trim();
     const first = source.indexOf('{');
@@ -301,50 +305,49 @@ export class CampusForumData {
         const context = window.SillyTavern?.getContext?.() || {};
         const configuredMaxTokens = Number.parseInt(context.max_response_length, 10)
             || Number.parseInt(context.max_length, 10) || 2048;
-        const controller = typeof AbortController === 'function' ? new AbortController() : null;
-        const timeout = setTimeout(() => controller?.abort(), 240000);
-        let response;
-        try {
-            response = await apiManager.callAI([
-                { role: 'system', name: 'SYSTEM (校园论坛规则)', content: FORUM_SYSTEM_PROMPT, isPhoneMessage: true },
-                { role: 'user', content: request, isPhoneMessage: true }
-            ], {
-                appId: 'x',
-                max_tokens: Math.max(8000, configuredMaxTokens),
-                stream: false,
-                signal: controller?.signal
-            });
-        } catch (error) {
-            if (controller?.signal.aborted) throw new Error('论坛生成超时，已中断本次请求');
-            throw error;
-        } finally {
-            clearTimeout(timeout);
-        }
-        if (!response?.success) throw new Error(response?.error || '论坛内容生成失败');
-        const rawText = String(response.summary || response.content || response.text || '').trim();
-        let parsed;
-        try {
-            parsed = parseJsonPayload(rawText);
-        } catch (firstError) {
-            const retryResponse = await apiManager.callAI([
-                { role: 'system', name: 'SYSTEM (校园论坛规则)', content: FORUM_SYSTEM_PROMPT, isPhoneMessage: true },
-                { role: 'user', content: request + '\\n\\n上一次回复未能解析为 JSON。请重新生成完整结果，不要解释、不要 Markdown、不要代码围栏；只输出一个以 { 开始、以 } 结束的 JSON 对象，字段必须为“帖子”和“热点”。', isPhoneMessage: true }
-            ], {
-                appId: 'x',
-                max_tokens: Math.max(8000, configuredMaxTokens),
-                stream: false
-            });
-            if (!retryResponse?.success) throw new Error(retryResponse?.error || firstError.message);
-            const retryValue = retryResponse.summary || retryResponse.content || retryResponse.text || retryResponse.output_text || '';
-            const retryText = Array.isArray(retryValue)
-                ? retryValue.map(part => String(part?.text || part?.content || '')).join('\\n').trim()
-                : String(retryValue || '').trim();
+        let parsed = null;
+        let parseError = null;
+        let rawText = '';
+        // Five public boards can produce 15–25 posts (plus an optional hidden
+        // board). A 4k-token floor is often too small and encourages truncated
+        // or explanatory responses, so leave room for the complete JSON.
+        const outputTokenLimit = Math.max(8000, configuredMaxTokens);
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+            const controller = typeof AbortController === 'function' ? new AbortController() : null;
+            const timeout = setTimeout(() => controller?.abort(), 240000);
+            let response;
+            const retryInstruction = attempt === 0 ? '' : '\n\n上一次回复未能解析为 JSON。请重新生成完整结果，不要解释、不要 Markdown、不要代码围栏；只输出一个以 { 开始、以 } 结束的 JSON 对象，字段必须为“帖子”和“热点”。帖子数组每个栏目至少 3 条。';
             try {
-                parsed = parseJsonPayload(retryText);
-            } catch (retryError) {
-                const preview = retryText.replace(/\\s+/g, ' ').slice(0, 180);
-                throw new Error(retryError.message + '；已自动重试一次。模型返回：' + (preview || '（空内容）'));
+                response = await apiManager.callAI([
+                    { role: 'system', name: 'SYSTEM (校园论坛规则)', content: FORUM_SYSTEM_PROMPT, isPhoneMessage: true },
+                    { role: 'user', content: `${request}${retryInstruction}`, isPhoneMessage: true }
+                ], {
+                    appId: 'x',
+                    max_tokens: outputTokenLimit,
+                    stream: false,
+                    signal: controller?.signal
+                });
+            } catch (error) {
+                if (controller?.signal.aborted) throw new Error('论坛生成超时，已中断本次请求');
+                throw error;
+            } finally {
+                clearTimeout(timeout);
             }
+            if (!response?.success) throw new Error(response?.error || '论坛内容生成失败');
+            const responseText = response.summary || response.content || response.text || response.output_text || '';
+            rawText = Array.isArray(responseText)
+                ? responseText.map(part => String(part?.text || part?.content || '')).join('\n').trim()
+                : String(responseText || '').trim();
+            try {
+                parsed = parseJsonPayload(rawText);
+                break;
+            } catch (error) {
+                parseError = error;
+            }
+        }
+        if (!parsed) {
+            const preview = rawText.replace(/\s+/g, ' ').slice(0, 180);
+            throw new Error(`${parseError?.message || '论坛 JSON 解析失败'}；已自动重试一次。模型返回：${preview || '（空内容）'}`);
         }
         const payload = parsed?.论坛 && typeof parsed.论坛 === 'object' ? parsed.论坛 : parsed;
         const rawPosts = payload?.帖子 || payload?.posts || payload?.forum_view || [];
