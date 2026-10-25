@@ -38,7 +38,7 @@ import {
 } from './apps/mofo/mofo-renderer.js';
 
 const ST_PHONE_BASE_URL = new URL('./', import.meta.url).href;
-const ST_PHONE_VERSION = '1.6.41';
+const ST_PHONE_VERSION = '1.6.42';
 const ST_PHONE_CSS_REVISION = '20261020-ios-complete-theme-v3';
 const ST_PHONE_APP_SWIPE_REVISION = '20261002-wechat-chat-return';
 const ST_PHONE_ALBUM_MODULE_REVISION = '20261006-story-image-outside-close';
@@ -54,12 +54,12 @@ const ST_PHONE_HONEY_THEME_URL = new URL('./apps/honey/honeyzt.png', import.meta
 const ST_PHONE_GAMES_MODULE_URL = new URL(`./apps/games/games-app.js?v=${ST_PHONE_VERSION}&r=${ST_PHONE_APP_SWIPE_REVISION}`, import.meta.url).href;
 const ST_PHONE_GAMES_CSS_URL = new URL('./apps/games/poker/poker.css?v=1.0.2', import.meta.url).href;
 const ST_PHONE_UPDATE_MANIFEST_URLS = [
-    'https://raw.githubusercontent.com/guanyuzhao96-cmd/yuzuki-phone/feat/read-only-character-dossier/manifest.json',
-    'https://raw.githubusercontent.com/guanyuzhao96-cmd/yuzuki-phone/feat/read-only-character-dossier/manifest.json'
+    'https://raw.githubusercontent.com/gaigai315/yuzuki-phone/main/manifest.json',
+    'https://raw.githubusercontent.com/gaigai315/yuzuki-phone/master/manifest.json'
 ];
 const ST_PHONE_UPDATE_LOG_URLS = [
-    'https://raw.githubusercontent.com/guanyuzhao96-cmd/yuzuki-phone/feat/read-only-character-dossier/update-log.json',
-    'https://raw.githubusercontent.com/guanyuzhao96-cmd/yuzuki-phone/feat/read-only-character-dossier/update-log.json'
+    'https://raw.githubusercontent.com/gaigai315/yuzuki-phone/main/update-log.json',
+    'https://raw.githubusercontent.com/gaigai315/yuzuki-phone/master/update-log.json'
 ];
 const ST_PHONE_LOCAL_UPDATE_LOG_URL = new URL('./update-log.json', import.meta.url).href;
 const WECHAT_ONLINE_PROACTIVE_ENABLED_KEY = 'wechat_online_proactive_enabled';
@@ -149,11 +149,7 @@ const ST_PHONE_CURRENT_UPDATE = {
     version: ST_PHONE_VERSION,
     date: '2026-10-25',
     items: [
-        '【任务】不再要求绑定世界书或 CWB 目录；从当前聊天上下文、MVU 与自动检索的角色档案匹配资料。',
-        '【档案】角色档案列表仅显示存在有效动态资料字段的角色，过滤只有目录名或静态资料的条目。',
-        '【修复】补齐公告数组遗漏的逗号，修复插件脚本无法解析；入口恢复为扩展菜单启动。',
         '【论坛】刷新论坛改为插件页内直接调用 API 生成并展示帖子与热点，结果按当前聊天保存，不再要求发送聊天请求。',
-        '【修复】更新检查改为读取 guanyuzhao96-cmd 的 feat/read-only-character-dossier 分支，避免误查旧上游版本。',
         '【修复】任务系统改为按钮级绑定点击事件，并更新模块缓存标记，修复任务生成按钮无响应。',
         '【扫描】刷新时检索全部酒馆世界书（包含未激活世界书），仅列出存在动态角色档案的角色。',
         '【新增】系统商店模块：同步角色卡三级商店商品、技能、余额、购齐进度与现金兑换，并通过当前聊天提交购买请求。',
@@ -1477,7 +1473,7 @@ if (window.GGP_Loaded) {
             imageGenerationManagerModule,
             worldbookManagerModule
         ] = await Promise.all([
-            import('./config/apps.js?v=1.6.21'),
+            import('./config/apps.js?v=1.6.19'),
             import('./config/storage.js?v=20261006-story-upload-console-cleanup'),
             import('./config/api-manager.js?v=20261009-unified-sse-parser'),
             import('./config/time-manager.js'),    // 👈 取消懒加载
@@ -5850,7 +5846,6 @@ if (window.GGP_Loaded) {
         const extensionsMenu = document.getElementById('extensionsMenu');
         const topSettingsHolder = document.getElementById('top-settings-holder');
         const toolPanelHost = extensionsMenu || topSettingsHolder;
-        const useExtensionsMenu = !!extensionsMenu;
         if (!toolPanelHost) {
             console.error('❌ 找不到手机入口挂载点');
             return;
@@ -5865,7 +5860,7 @@ if (window.GGP_Loaded) {
         const iconStyle = isEnabled ? '' : 'opacity: 0.4; filter: grayscale(1);';
         const statusText = isEnabled ? '已启用' : '已禁用';
 
-        const triggerHTML = useExtensionsMenu ? `
+        const triggerHTML = extensionsMenu ? `
             <div id="phoneDrawerToolEntry" class="extension_container interactable" tabindex="0">
                 <div id="phoneDrawerToolRow" class="list-group-item flex-container flexGap5 interactable"
                      tabindex="0"
@@ -11277,13 +11272,13 @@ if (window.GGP_Loaded) {
 
                 // 打开对应的APP
                 if (appId === 'dossier') {
-                    import(`./apps/dossier/dossier-app.js?v=${ST_PHONE_VERSION}&r=20261025-character-dossier-gallery`).then(async ({ DossierApp }) => {
+                    import('./apps/dossier/dossier-app.js').then(async ({ DossierApp }) => {
                         if (currentApp !== 'dossier') return;
                         if (!window.VirtualPhone.dossierApp) window.VirtualPhone.dossierApp = new DossierApp(phoneShell, storage);
                         await window.VirtualPhone.dossierApp.render();
                     }).catch(error => console.error('[角色档案] 打开失败:', error));
                 } else if (appId === 'system-tasks') {
-                    import(`./apps/system-tasks/system-tasks-app.js?v=${ST_PHONE_VERSION}&r=20261025-task-lazy-lookup-v628`).then(async ({ SystemTasksApp }) => {
+                    import(`./apps/system-tasks/system-tasks-app.js?v=${ST_PHONE_VERSION}&r=20261025-task-button-click-fix`).then(async ({ SystemTasksApp }) => {
                         if (currentApp !== 'system-tasks') return;
                         if (!window.VirtualPhone.systemTasksApp) window.VirtualPhone.systemTasksApp = new SystemTasksApp(phoneShell, storage);
                         await window.VirtualPhone.systemTasksApp.render();
