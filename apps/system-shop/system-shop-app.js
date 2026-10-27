@@ -114,7 +114,9 @@ export class SystemShopApp {
         input.dispatchEvent(new Event('input', { bubbles: true }));
         input.dispatchEvent(new Event('change', { bubbles: true }));
         this.lastBlock = '';
-        this.notice = '指令已放入酒馆输入框；确认内容后发送，由角色卡结算脚本核验。';
+        this.notice = text.includes('首次开启商店')
+            ? '首次解锁指令已放入输入框；发送后角色卡会扣除50点并解锁一级商店。'
+            : '指令已放入酒馆输入框；确认内容后发送，由角色卡结算脚本核验。';
         this.render();
         return true;
     }
@@ -228,7 +230,7 @@ export class SystemShopApp {
         root?.querySelector('[data-action="back"]')?.addEventListener('click', () => window.dispatchEvent(new CustomEvent('phone:goHome')));
         root?.querySelector('[data-action="refresh"]')?.addEventListener('click', () => { this.notice = ''; this.render(); });
         root?.querySelector('[data-action="clear"]')?.addEventListener('click', () => { this.selected.clear(); this.updateBasket(); });
-        root?.querySelector('[data-unlock="1"]')?.addEventListener('click', () => this.appendStandalone('【系统商店】\n打开商店'));
+        root?.querySelector('[data-unlock="1"]')?.addEventListener('click', () => this.appendStandalone('【系统商店】\n首次开启商店'));
         root?.querySelector('[data-unlock="2"]')?.addEventListener('click', () => this.appendStandalone('【系统商店】\n开启二级商店'));
         root?.querySelector('[data-unlock="3"]')?.addEventListener('click', () => this.appendStandalone('【系统商店】\n开启三级商店'));
         root?.querySelectorAll('[data-product]')?.forEach(button => button.addEventListener('click', () => {
