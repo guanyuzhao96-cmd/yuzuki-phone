@@ -13,6 +13,7 @@
 import { GlobalSocialStore } from '../../config/global-social-store.js';
 import { WorldbookManager } from '../../config/worldbook-manager.js';
 import { buildCharacters } from '../dossier/dossier-data.js';
+import { readMvuWallet, changeMvuWallet } from './mvu-wallet.js?v=20261028-wallet-151';
 import { parseImagePromptDescriptionPair, readBalancedImagePromptGroup } from '../../config/image-prompt-format.js';
 import { parseWechatVoiceContent } from './voice-text.js';
 import {
@@ -1871,6 +1872,7 @@ export class WechatData {
                 time: String(record.time || '').trim(),
                 timestamp: Number.isFinite(timestamp) && timestamp > 0 ? timestamp : 0,
                 realTimestamp: Number.isFinite(realTimestamp) && realTimestamp > 0 ? realTimestamp : Date.now(),
+                mvuSynced: record.mvuSynced === true,
                 fromMainChatTag: record.fromMainChatTag === true,
                 timelineLinked: record.timelineLinked === true,
                 tavernMessageIndex: Number.isFinite(tavernMessageIndex) ? tavernMessageIndex : undefined,
@@ -1918,6 +1920,8 @@ export class WechatData {
     }
 
     getWalletAssetProfile(chatId = null) {
+        const mvu = readMvuWallet();
+        if (mvu.active) return { walletBalance: mvu.balance, savingsAccounts: [], creditCards: [], debts: [] };
         if (!this.data.walletAssetsByChat || typeof this.data.walletAssetsByChat !== 'object') {
             this.data.walletAssetsByChat = {};
         }
@@ -1928,6 +1932,7 @@ export class WechatData {
     }
 
     _getMutableWalletAssetProfile(chatId = null) {
+        if (readMvuWallet().active) return null;
         if (!this.data.walletAssetsByChat || typeof this.data.walletAssetsByChat !== 'object') {
             this.data.walletAssetsByChat = {};
         }
@@ -2206,6 +2211,7 @@ export class WechatData {
     }
 
     async applyWalletAssetEvaluation(evaluation, { chatId = null, resetTransactions = false } = {}) {
+        if (readMvuWallet().active) throw new Error('当前钱包与MVU共用余额，请通过实际收支或系统商店兑换更新。');
         const profile = normalizeWalletAssetProfile(evaluation);
         if (!profile || !Number.isFinite(Number(profile.walletBalance)) || Number(profile.walletBalance) < 0) {
             throw new Error('资产评估结果缺少有效的微信零钱');
@@ -2275,6 +2281,7 @@ export class WechatData {
             balanceBefore: Number.isFinite(Number(balanceState.balanceBefore)) ? Number(balanceState.balanceBefore) : null,
             balanceAfter: Number.isFinite(Number(balanceState.balanceAfter)) ? Number(balanceState.balanceAfter) : null,
             affectsBalance: balanceState.affectsBalance === true,
+            mvuSynced: meta.mvuSynced === true,
             fromMainChatTag: meta.fromMainChatTag === true,
             timelineLinked: meta.timelineLinked === true,
             tavernMessageIndex: Number.isFinite(tavernMessageIndex) ? tavernMessageIndex : undefined,
@@ -2336,7 +2343,7 @@ export class WechatData {
         this.data.walletTransactions = this.data.walletTransactions.filter(record => !predicate(record));
 
         removed.slice().reverse().forEach(record => {
-            if (record?.affectsBalance !== true) return;
+            if (record?.affectsBalance !== true || record?.mvuSynced === true) return;
             const key = String(record.walletKey || this.walletDefaultKey);
             const profile = this.data.walletAssetsByChat?.[key];
             if (record.balanceScope === 'savings') {
@@ -2379,7 +2386,11 @@ export class WechatData {
         return true;
     }
 
+    getMvuWalletState() { return readMvuWallet(); }
+
     getWalletBalance(chatId = null) {
+        const mvu = readMvuWallet();
+        if (mvu.active) return mvu.ready ? mvu.balance : null;
         if (!this.data.walletByChat) this.data.walletByChat = {};
         const key = chatId || this.walletDefaultKey;
         let balance = this.data.walletByChat[key];
@@ -2391,7 +2402,11 @@ export class WechatData {
         return balance === undefined ? null : balance;
     }
 
-    spendWalletBalance(amount, chatId = null, transaction = null) {
+    async spendWalletBalance(amount, chatId = null, transaction = null) {
+        if (transaction && this._findWalletTransactionDuplicate(transaction)) {
+            const balance = this.getWalletBalance(chatId);
+            return { success: true, duplicate: true, balanceBefore: balance, balanceAfter: balance };
+        }
         const parsedAmount = Number.parseFloat(amount);
         const spendAmount = Number.isFinite(parsedAmount) ? Math.round(parsedAmount * 100) / 100 : 0;
         const rawBalance = this.getWalletBalance(chatId);
@@ -2407,19 +2422,14 @@ export class WechatData {
             return { success: false, balanceBefore, balanceAfter: balanceBefore, reason: 'insufficient_balance' };
         }
 
-        const expectedBalance = Math.round((balanceBefore - spendAmount) * 100) / 100;
-        const updatedBalance = Number.parseFloat(this.updateWalletBalance(-spendAmount, chatId, transaction));
-        const balanceAfter = Number.isFinite(updatedBalance) ? Math.round(updatedBalance * 100) / 100 : balanceBefore;
-        const success = Math.abs(balanceAfter - expectedBalance) < 0.001;
-        return {
-            success,
-            balanceBefore,
-            balanceAfter,
-            reason: success ? '' : 'deduction_failed'
-        };
+        return await this._changeWalletBalance(-spendAmount, chatId, transaction);
     }
 
-    spendFromPaymentSource(amount, sourceId = 'wallet', chatId = null, transaction = null) {
+    async spendFromPaymentSource(amount, sourceId = 'wallet', chatId = null, transaction = null) {
+        if (transaction && this._findWalletTransactionDuplicate(transaction)) {
+            const balance = this.getWalletBalance(chatId);
+            return { success: true, duplicate: true, amount: Number(amount), balanceBefore: balance, balanceAfter: balance };
+        }
         const parsedAmount = Number.parseFloat(amount);
         const spendAmount = Number.isFinite(parsedAmount) ? Math.round(parsedAmount * 100) / 100 : 0;
         const source = this.getWalletRepaymentSources(chatId)
@@ -2450,7 +2460,7 @@ export class WechatData {
         } : null;
 
         if (source.type === 'wallet') {
-            const result = this.spendWalletBalance(spendAmount, chatId, paymentTransaction);
+            const result = await this.spendWalletBalance(spendAmount, chatId, paymentTransaction);
             return { ...result, amount: spendAmount, source };
         }
 
@@ -2479,6 +2489,7 @@ export class WechatData {
 
     // 设置钱包金额（初始化用）
     setWalletBalance(amount, chatId = null) {
+        if (readMvuWallet().active) throw new Error('当前钱包与MVU共用余额，请通过实际收支或系统商店兑换更新。');
         if (!this.data.walletByChat) this.data.walletByChat = {};
         const key = chatId || this.walletDefaultKey;
         this.data.walletByChat[key] = parseFloat(amount);
@@ -2488,6 +2499,7 @@ export class WechatData {
 
     // 重新评估资产时，以新余额重新开始并永久清空全部零钱流水
     async resetWalletBalance(amount) {
+        if (readMvuWallet().active) throw new Error('当前钱包与MVU共用余额，请通过实际收支或系统商店兑换更新。');
         const normalizedAmount = Number.parseFloat(amount);
         if (!Number.isFinite(normalizedAmount) || normalizedAmount < 0) {
             throw new Error('重置的零钱金额无效');
@@ -2504,7 +2516,64 @@ export class WechatData {
     }
 
     // 变更钱包金额（收发红包/转账用，传入正数加钱，负数扣钱）
-    updateWalletBalance(delta, chatId = null, transaction = null) {
+    async updateWalletBalance(delta, chatId = null, transaction = null) {
+        const result = await this._changeWalletBalance(delta, chatId, transaction);
+        return result.success ? result.balanceAfter : null;
+    }
+
+    async _changeWalletBalance(delta, chatId = null, transaction = null) {
+        this._lastWalletError = '';
+        const storageKey = this.getStorageKey();
+        const dataOwner = this.data;
+        const parsed = Number(delta);
+        if (!Number.isFinite(parsed) || parsed === 0) return { success: false, reason: 'invalid_amount' };
+        if (transaction && this._findWalletTransactionDuplicate(transaction)) {
+            const balance = this.getWalletBalance(chatId);
+            return { success: true, duplicate: true, balanceBefore: balance, balanceAfter: balance };
+        }
+        const result = await changeMvuWallet(parsed, transaction || {});
+        if (this.getStorageKey() !== storageKey || this.data !== dataOwner) {
+            this._lastWalletError = 'mvu_context_changed';
+            return { success: false, reason: 'mvu_context_changed' };
+        }
+        if (!result.handled) {
+            const balanceBefore = Number(this.getWalletBalance(chatId)) || 0;
+            if (balanceBefore + parsed < 0) return { success: false, reason: 'insufficient_balance', balanceBefore, balanceAfter: balanceBefore };
+            const balanceAfter = this._updateLocalWalletBalance(parsed, chatId, transaction);
+            return { success: true, balanceBefore, balanceAfter };
+        }
+        if (!result.success) {
+            this._lastWalletError = result.reason;
+            const message = result.reason === 'mvu_busy'
+                ? '当前正在生成剧情，请生成结束后重试。'
+                : result.reason === 'insufficient_balance'
+                ? 'MVU余额不足，本次交易未完成。'
+                : 'MVU钱包未就绪或写入失败，本次交易未完成，请稍后重试。';
+            window.VirtualPhone?.notify?.('钱包同步失败', message, '⚠️');
+            return result;
+        }
+        if (!this.data.walletByChat) this.data.walletByChat = {};
+        this.data.walletByChat[this.walletDefaultKey] = result.balanceAfter;
+        this._syncWalletAssetBalance(this.walletDefaultKey, result.balanceAfter);
+        if (!result.duplicate) {
+            this._appendWalletTransaction(parsed, {
+                ...(transaction || {}),
+                referenceId: result.referenceId,
+                mvuSynced: true,
+                timelineLinked: true,
+                tavernMessageIndex: result.floor
+            }, {
+                affectsBalance: true,
+                balanceBefore: result.balanceBefore,
+                balanceAfter: result.balanceAfter,
+                walletKey: this.walletDefaultKey
+            });
+        }
+        await this.saveData();
+        return result;
+    }
+
+    _updateLocalWalletBalance(delta, chatId = null, transaction = null) {
         if (!this.data.walletByChat) this.data.walletByChat = {};
         const key = chatId || this.walletDefaultKey;
         const parsedDelta = Number.parseFloat(delta);
