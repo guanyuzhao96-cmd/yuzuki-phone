@@ -426,7 +426,7 @@ test('offline payment ledger keeps the category title and shows product names on
     });
 });
 
-test('offline payment wallet transaction is idempotent and rolls back with its floor', () => {
+test('offline payment wallet transaction is idempotent and rolls back with its floor', async () => {
     const originalWindow = globalThis.window;
     globalThis.window = {
         VirtualPhone: {},
@@ -460,8 +460,8 @@ test('offline payment wallet transaction is idempotent and rolls back with its f
             fromMainChatTag: true,
             tavernMessageIndex: 8
         };
-        const first = data.spendWalletBalance(20, null, transaction);
-        data.updateWalletBalance(-20, null, transaction);
+        const first = await data.spendWalletBalance(20, null, transaction);
+        await data.updateWalletBalance(-20, null, transaction);
 
         assert.equal(first.success, true);
         assert.equal(data.getWalletBalance(), 80);
