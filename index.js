@@ -29,6 +29,7 @@ import {
     renderOfflineWechatPaymentReceipt
 } from './apps/wechat/offline-payment.js?v=1.6.9&r=20261020-ios-receipts';
 import { parseWechatVoiceContent } from './apps/wechat/voice-text.js';
+import { getMvuWalletPrompt } from './apps/wechat/mvu-wallet.js?v=20261028-wallet-151';
 import { StoryImageAutoScheduler } from './apps/album/story-image-auto-scheduler.js';
 import {
     combineMofoBeautifyTemplate,
@@ -38,14 +39,14 @@ import {
 } from './apps/mofo/mofo-renderer.js';
 
 const ST_PHONE_BASE_URL = new URL('./', import.meta.url).href;
-const ST_PHONE_VERSION = '1.6.50';
+const ST_PHONE_VERSION = '1.6.51';
 const ST_PHONE_CSS_REVISION = '20261020-ios-complete-theme-v3';
 const ST_PHONE_APP_SWIPE_REVISION = '20261002-wechat-chat-return';
 const ST_PHONE_ALBUM_MODULE_REVISION = '20261006-story-image-outside-close';
-const ST_PHONE_WECHAT_MODULE_REVISION = '20261028-chat-update-button';
+const ST_PHONE_WECHAT_MODULE_REVISION = '20261028-mvu-wallet';
 const ST_PHONE_WEIBO_MODULE_REVISION = '20261002-first-return-guard';
 const ST_PHONE_X_MODULE_REVISION = '20261010-publish-guard';
-const ST_PHONE_HONEY_ASSET_REVISION = '20261003-theme-media-recovery';
+const ST_PHONE_HONEY_ASSET_REVISION = '20261028-mvu-wallet';
 const ST_PHONE_GLOBAL_CSS_URL = new URL(`./phone.css?v=${ST_PHONE_VERSION}&r=${ST_PHONE_CSS_REVISION}`, import.meta.url).href;
 const ST_PHONE_REGULAR_FONT_URL = new URL('./assets/vendor/fontawesome/fa-regular-400.woff2', import.meta.url).href;
 const ST_PHONE_HONEY_MODULE_URL = new URL(`./apps/honey/honey-app.js?v=${ST_PHONE_VERSION}&r=${ST_PHONE_HONEY_ASSET_REVISION}`, import.meta.url).href;
@@ -147,18 +148,12 @@ const WECHAT_INITIAL_ENABLED_OFFLINE_KEYS = [
 const WECHAT_MESSAGE_SOUND_URL = new URL('./assets/sounds/iphone-message-notification.mp3', ST_PHONE_BASE_URL).href;
 const ST_PHONE_CURRENT_UPDATE = {
     version: ST_PHONE_VERSION,
-    date: '2026-10-25',
+    date: '2026-10-28',
     items: [
-        '【论坛】刷新论坛改为插件页内直接调用 API 生成并展示帖子与热点，结果按当前聊天保存，不再要求发送聊天请求。',
-        '【修复】任务系统改为按钮级绑定点击事件，并更新模块缓存标记，修复任务生成按钮无响应。',
-        '【扫描】刷新时检索全部酒馆世界书（包含未激活世界书），仅列出存在动态角色档案的角色。',
-        '【新增】系统商店模块：同步角色卡三级商店商品、技能、余额、购齐进度与现金兑换，并通过当前聊天提交购买请求。',
-        '【同步】校园论坛读取角色卡本轮 MVU 帖子与热点；请求更新时沿用角色卡论坛生成及权限规则。',
-        '【新增】任务系统应用：读取当前 MVU 进行中的任务，按 CWB 目录定位角色静态与动态资料，并向当前聊天提交任务生成请求。',
-        '【图标更新】替换所有默认桌面应用与悬浮入口图标，并统一付款凭证顶部素材。',
-        '【背景更新】更新默认壁纸，并迁移旧版内置默认壁纸与默认应用图标。',
-        '【样式更新】将手机外壳、动态岛、状态栏、Dock、应用导航、卡片、弹窗和表单统一为 iOS 风格。'
-    ]
+        "【钱包同步】微信钱包读取当前聊天MVU的system.inventory.cny，与主角可支配人民币共用一笔余额；禁止AI资产评估覆盖MVU。",
+        "【收支结算】转账、红包、收款、退款与蜜语充值提现等待MVU写入成功后结算，金额不足或写入失败时不完成交易；加入并发串行与交易ID去重。",
+        "【防重复扣款】主聊天线上支付回执只同步账单，现金收支仍由角色卡简报结算；微信已结算记录传入聊天上下文避免重复登记。"
+]
 };
 
 // 🔥 防重复加载检查（放在最前面，避免任何代码执行）
@@ -2884,7 +2879,7 @@ if (window.GGP_Loaded) {
             const latestTime = currentTime || tm?.getCurrentStoryTime?.();
             if (!latestTime?.date) return [];
 
-            const module = await import('./apps/wechat/wechat-data.js?v=20261011-wallet-credit-repayment');
+            const module = await import('./apps/wechat/wechat-data.js?v=20261028-wallet-151');
             if (!window.VirtualPhone) window.VirtualPhone = {};
             const existingWechatData = window.VirtualPhone.wechatApp?.wechatData
                 || window.VirtualPhone.cachedWechatData
@@ -8311,7 +8306,7 @@ if (window.GGP_Loaded) {
         const conversationId = getCurrentTavernConversationIdentity(context);
 
         // 导入 WechatData（使用单例模式，确保消息被存储）
-        import('./apps/wechat/wechat-data.js?v=20261011-wallet-credit-repayment').then(module => {
+        import('./apps/wechat/wechat-data.js?v=20261028-wallet-151').then(module => {
             let wechatData;
 
             if (getCurrentTavernConversationIdentity() !== conversationId) {
@@ -9356,7 +9351,7 @@ if (window.GGP_Loaded) {
             const sourceConversationId = getCurrentTavernConversationIdentity();
 
             // 导入 WeChat 数据模块处理
-            import('./apps/wechat/wechat-data.js?v=20261011-wallet-credit-repayment').then(async module => {
+            import('./apps/wechat/wechat-data.js?v=20261028-wallet-151').then(async module => {
                 let wechatData;
                 if (getCurrentTavernConversationIdentity() !== sourceConversationId) {
                     console.warn('⚠️ 微信回复写入前会话已切换，丢弃旧会话回调');
@@ -9633,7 +9628,7 @@ if (window.GGP_Loaded) {
         if (!/"moments"\s*:/.test(sourceText)) return null;
 
         try {
-            const module = await import('./apps/wechat/wechat-data.js?v=20261011-wallet-credit-repayment');
+            const module = await import('./apps/wechat/wechat-data.js?v=20261028-wallet-151');
             if (!window.VirtualPhone) window.VirtualPhone = {};
 
             const context = getContext();
@@ -9680,7 +9675,7 @@ if (window.GGP_Loaded) {
         if (payments.length === 0) return [];
 
         const sourceConversationId = getCurrentTavernConversationIdentity();
-        const module = await import('./apps/wechat/wechat-data.js?v=20261011-wallet-credit-repayment');
+        const module = await import('./apps/wechat/wechat-data.js?v=20261028-wallet-151');
         if (getCurrentTavernConversationIdentity() !== sourceConversationId) {
             console.warn('⚠️ [线上支付] 扣款前会话已切换，丢弃旧会话回调');
             return [];
@@ -9716,7 +9711,8 @@ if (window.GGP_Loaded) {
             }
         }
 
-        const results = payments.map((payment, paymentIndex) => {
+        const results = [];
+        for (const [paymentIndex, payment] of payments.entries()) {
             const referenceId = `wechat_offline_payment:${Number.isFinite(floor) ? floor : 'unknown'}:${payment.sourceIndex}:${paymentIndex}`;
             const ledgerCopy = getOfflineWechatPaymentLedgerCopy(payment);
             const duplicate = wechatData.getWalletTransactions?.()
@@ -9727,7 +9723,8 @@ if (window.GGP_Loaded) {
                     duplicate.detail = ledgerCopy.detail;
                     wechatData.saveData?.();
                 }
-                return { success: true, duplicate: true, payment, transaction: duplicate };
+                results.push({ success: true, duplicate: true, payment, transaction: duplicate });
+                continue;
             }
 
             const transaction = {
@@ -9743,15 +9740,20 @@ if (window.GGP_Loaded) {
                 tavernMessageIndex: Number.isFinite(floor) ? floor : undefined,
                 batchId: String(metadata.batchId || '').trim()
             };
-            const result = wechatData.spendWalletBalance(payment.amount, null, transaction);
+            // The rolecard cash operation owns main-chat story payments. Mirror the
+            // receipt only; charging here would deduct the same payment a second time.
+            const mvuWallet = wechatData.getMvuWalletState();
+            const result = mvuWallet.active
+                ? { success: true, receiptOnly: true, transaction: wechatData.recordWalletTransaction(-payment.amount, { ...transaction, mvuSynced: true }) }
+                : await wechatData.spendWalletBalance(payment.amount, null, transaction);
             if (!result.success) {
                 const reason = result.reason === 'insufficient_balance'
                     ? `余额不足（当前 ¥${Number(result.balanceBefore || 0).toFixed(2)}，需扣 ¥${Number(payment.amount).toFixed(2)}）`
                     : '扣款金额无效';
                 console.warn(`⚠️ [线上支付] ${reason}`, payment);
             }
-            return { ...result, payment };
-        });
+            results.push({ ...result, payment });
+        }
 
         if (results.some(result => result.success && !result.duplicate)) {
             const wechatApp = window.VirtualPhone.wechatApp || window.currentWechatApp || window.ggp_currentWechatApp;
@@ -11697,7 +11699,7 @@ if (window.GGP_Loaded) {
 
                     let wechatData = window.VirtualPhone?.wechatApp?.wechatData || window.VirtualPhone?.cachedWechatData;
                     if (!wechatData) {
-                        const module = await import('./apps/wechat/wechat-data.js?v=20261011-wallet-credit-repayment');
+                        const module = await import('./apps/wechat/wechat-data.js?v=20261028-wallet-151');
                         wechatData = new module.WechatData(storage);
                     }
 
@@ -11933,7 +11935,7 @@ if (window.GGP_Loaded) {
                                     || window.VirtualPhone.cachedWechatData
                                     || null;
                                 if (!wechatDataInstance && storage) {
-                                    const module = await import('./apps/wechat/wechat-data.js?v=20261011-wallet-credit-repayment');
+                                    const module = await import('./apps/wechat/wechat-data.js?v=20261028-wallet-151');
                                     if (getCurrentTavernConversationIdentity() !== sourceConversationId) {
                                         console.warn('⚠️ 微信删楼回滚期间会话已切换，丢弃旧会话回调');
                                         return;
@@ -12148,6 +12150,11 @@ if (window.GGP_Loaded) {
                                 return; 
                             }
 
+                            const walletPrompt = getMvuWalletPrompt();
+                            if (walletPrompt && !eventData.chat.some(msg => msg?.identifier === 'wechat_mvu_wallet')) {
+                                eventData.chat.unshift({ role: 'system', content: walletPrompt, isPhoneMessage: true, identifier: 'wechat_mvu_wallet' });
+                            }
+
                             const requirePhoneInjectionVariable = isPhoneInjectionVariableRequired();
                             const requestHasPhoneMacro = (() => {
                                 try {
@@ -12234,7 +12241,7 @@ if (window.GGP_Loaded) {
                                     let wechatDataInstance = window.VirtualPhone?.wechatApp?.wechatData || window.VirtualPhone?.cachedWechatData;
                                     if (!wechatDataInstance && storage) {
                                         try {
-                                            const module = await import('./apps/wechat/wechat-data.js?v=20261011-wallet-credit-repayment');
+                                            const module = await import('./apps/wechat/wechat-data.js?v=20261028-wallet-151');
                                             if (!window.VirtualPhone) window.VirtualPhone = {};
                                             window.VirtualPhone.cachedWechatData = new module.WechatData(storage);
                                             wechatDataInstance = window.VirtualPhone.cachedWechatData;
