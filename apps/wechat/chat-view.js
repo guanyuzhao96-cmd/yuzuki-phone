@@ -1,6 +1,7 @@
 import { CALL_HANGUP_RULE, parseCallHangupReply } from '../../config/call-hangup.js';
 import { WorldbookManager } from '../../config/worldbook-manager.js';
 import { buildCharacters, findMvuRole, formatMvuValue, latestMvuSnapshot } from '../dossier/dossier-data.js';
+import { getMvuWalletPrompt } from './mvu-wallet.js?v=20261028-wallet-151';
 /* ========================================================
  *  柚月小手机 (Yuzuki's Little Phone)
  *  作者 (Author): yuzuki
@@ -8114,7 +8115,7 @@ renderChatRoom(chat) {
         };
     }
 
-    _applyWechatPaymentAction(chatId, action = {}, actorName = '', timelineSource = {}) {
+    async _applyWechatPaymentAction(chatId, action = {}, actorName = '', timelineSource = {}) {
         const safeChatId = String(chatId || '').trim();
         if (!safeChatId || !action || action.type !== 'payment_action') return null;
 
@@ -8200,11 +8201,6 @@ renderChatRoom(chat) {
         }
 
         const nextStatus = isRefund ? 'refunded' : (targetType === 'redpacket' ? 'opened' : 'received');
-        const updated = this.app.wechatData.updateMessageById(safeChatId, target.id, {
-            status: nextStatus,
-            paymentHandledBy: actor,
-            paymentHandledAt: Date.now()
-        });
 
         if (isRefund && Number.isFinite(targetAmount) && targetAmount > 0) {
             const previousClaims = Array.isArray(target.claims) ? target.claims : [];
@@ -8212,7 +8208,7 @@ renderChatRoom(chat) {
             const refundAmount = isGroupPacket ? Math.max(0, targetAmount - claimedAmount) : targetAmount;
             if (refundAmount > 0) {
                 const paymentLabel = targetType === 'redpacket' ? '红包' : '转账';
-                this.app.wechatData.updateWalletBalance(refundAmount, null, {
+                const walletAfter = await this.app.wechatData.updateWalletBalance(refundAmount, null, {
                     type: targetType,
                     title: `${paymentLabel}退款-${actor || this.app.currentChat?.name || '微信好友'}`,
                     detail: `原${paymentLabel}已退回零钱`,
@@ -8230,8 +8226,15 @@ renderChatRoom(chat) {
                     tavernMessageIndex: timelineSource?.tavernMessageIndex,
                     batchId: timelineSource?.batchId
                 });
+                if (walletAfter === null) return null;
             }
         }
+
+        const updated = this.app.wechatData.updateMessageById(safeChatId, target.id, {
+            status: nextStatus,
+            paymentHandledBy: actor,
+            paymentHandledAt: Date.now()
+        });
 
         if (updated) {
             const recipientName = String(target.recipientName || target.targetName || '').trim();
@@ -8249,6 +8252,7 @@ renderChatRoom(chat) {
             ));
         }
 
+        if (updated) this._refreshVisibleChatMessages(safeChatId);
         return updated;
     }
     _getCatboxData() {
@@ -12099,6 +12103,8 @@ renderChatRoom(chat) {
 
     async buildMessagesArray(prompt, context, callMode = null, targetChatId = null, options = {}) {
         const messages = [];
+        const walletPrompt = getMvuWalletPrompt();
+        if (walletPrompt) messages.push({ role: 'system', content: walletPrompt, isPhoneMessage: true });
         const isProactive = !!options.proactive;
         const proactiveMeta = options.proactiveMeta || {};
         const lobbySelection = this._buildLobbySelection(context);
@@ -13414,10 +13420,10 @@ renderChatRoom(chat) {
                 messageId: transferId,
                 referenceId: `wechat:transfer:send:${transferId}`
             };
-            const spendResult = this.app.wechatData.spendFromPaymentSource(transferAmount, paymentSourceId, null, transferTransaction);
+            const spendResult = await this.app.wechatData.spendFromPaymentSource(transferAmount, paymentSourceId, null, transferTransaction);
             if (!spendResult?.success) {
                 const sourceName = spendResult?.source?.type === 'wallet' ? '零钱' : '该银行卡';
-                this.app.phoneShell.showNotification('余额不足', `${sourceName}只剩 ¥${Number(spendResult?.balanceBefore || 0).toFixed(2)}`, '❌');
+                this.app.phoneShell.showNotification(spendResult?.reason === 'insufficient_balance' ? '余额不足' : '支付失败', spendResult?.reason === 'insufficient_balance' ? `${sourceName}只剩 ¥${Number(spendResult?.balanceBefore || 0).toFixed(2)}` : '钱包同步未完成，本次未付款，请稍后重试。', '❌');
                 return;
             }
 
@@ -17370,10 +17376,10 @@ ${callTranscript}`;
                     messageId: redpacketId,
                     referenceId: `wechat:redpacket:send:${redpacketId}`
                 };
-                const spendResult = this.app.wechatData.spendFromPaymentSource(amount, paymentSourceId, null, redpacketTransaction);
+                const spendResult = await this.app.wechatData.spendFromPaymentSource(amount, paymentSourceId, null, redpacketTransaction);
                 if (!spendResult?.success) {
                     const sourceName = spendResult?.source?.type === 'wallet' ? '零钱' : '该银行卡';
-                    this.app.phoneShell.showNotification('余额不足', `${sourceName}只剩 ¥${Number(spendResult?.balanceBefore || 0).toFixed(2)}`, '❌');
+                    this.app.phoneShell.showNotification(spendResult?.reason === 'insufficient_balance' ? '余额不足' : '支付失败', spendResult?.reason === 'insufficient_balance' ? `${sourceName}只剩 ¥${Number(spendResult?.balanceBefore || 0).toFixed(2)}` : '钱包同步未完成，本次未付款，请稍后重试。', '❌');
                     return;
                 }
 
@@ -17440,10 +17446,10 @@ ${callTranscript}`;
                 messageId: redpacketId,
                 referenceId: `wechat:redpacket:send:${redpacketId}`
             };
-            const spendResult = this.app.wechatData.spendFromPaymentSource(redpacketAmount, paymentSourceId, null, redpacketTransaction);
+            const spendResult = await this.app.wechatData.spendFromPaymentSource(redpacketAmount, paymentSourceId, null, redpacketTransaction);
             if (!spendResult?.success) {
                 const sourceName = spendResult?.source?.type === 'wallet' ? '零钱' : '该银行卡';
-                this.app.phoneShell.showNotification('余额不足', `${sourceName}只剩 ¥${Number(spendResult?.balanceBefore || 0).toFixed(2)}`, '❌');
+                this.app.phoneShell.showNotification(spendResult?.reason === 'insufficient_balance' ? '余额不足' : '支付失败', spendResult?.reason === 'insufficient_balance' ? `${sourceName}只剩 ¥${Number(spendResult?.balanceBefore || 0).toFixed(2)}` : '钱包同步未完成，本次未付款，请稍后重试。', '❌');
                 return;
             }
 
@@ -17775,7 +17781,7 @@ ${callTranscript}`;
         }
     }
 
-    _claimGroupRedPacketForCurrentUser(chatId, message = {}) {
+    async _claimGroupRedPacketForCurrentUser(chatId, message = {}) {
         const safeChatId = String(chatId || '').trim();
         const packetMode = String(message.packetMode || '').trim();
         const isGroupPacket = message.isGroupPacket === true || packetMode === 'group_lucky' || packetMode === 'group_average';
@@ -17804,20 +17810,7 @@ ${callTranscript}`;
         const claimedAmount = claims.reduce((sum, claim) => sum + Math.round((Number.parseFloat(claim?.amount || 0) || 0) * 100), 0) / 100;
         const isFullyClaimed = (packetCount > 0 && claims.length >= packetCount)
             || (Number.isFinite(totalAmount) && claimedAmount >= totalAmount);
-        const updatedMessage = this.app.wechatData.updateMessageById(safeChatId, message.id, {
-            status: isFullyClaimed ? 'opened' : 'sent',
-            claims,
-            packetClaimCount: claims.length,
-            claimedAmount: claimedAmount.toFixed(2),
-            remainingAmount: Number.isFinite(totalAmount) ? Math.max(0, totalAmount - claimedAmount).toFixed(2) : '0.00',
-            lastClaimedBy: userName,
-            lastClaimedAmount: claimAmount.toFixed(2),
-            paymentHandledBy: userName,
-            paymentHandledAt: Date.now()
-        });
-        if (!updatedMessage) return null;
-
-        this.app.wechatData.updateWalletBalance(claimAmount, null, {
+        const walletAfter = await this.app.wechatData.updateWalletBalance(claimAmount, null, {
             type: 'redpacket',
             title: `群红包收入-${senderName || this.app.currentChat?.name || '群成员'}`,
             detail: packetMode === 'group_average' ? '均分群红包' : '拼手气群红包',
@@ -17836,11 +17829,26 @@ ${callTranscript}`;
             batchId: message.batchId
         });
 
+        if (walletAfter === null) return null;
+        const updatedMessage = this.app.wechatData.updateMessageById(safeChatId, message.id, {
+            status: isFullyClaimed ? 'opened' : 'sent',
+            claims,
+            packetClaimCount: claims.length,
+            claimedAmount: claimedAmount.toFixed(2),
+            remainingAmount: Number.isFinite(totalAmount) ? Math.max(0, totalAmount - claimedAmount).toFixed(2) : '0.00',
+            lastClaimedBy: userName,
+            lastClaimedAmount: claimAmount.toFixed(2),
+            paymentHandledBy: userName,
+            paymentHandledAt: Date.now()
+        });
+        if (!updatedMessage) return null;
+
+
         return { message: updatedMessage, amount: claimAmount };
     }
 
     // 🧧 打开红包详情界面（全新）
-    openRedPacket(messageId) {
+    async openRedPacket(messageId) {
         const chatId = this.app.currentChat?.id;
         if (!chatId) return;
         const messages = this.app.wechatData.getMessages(chatId);
@@ -17850,7 +17858,7 @@ ${callTranscript}`;
         const initialPacketMode = String(message.packetMode || '').trim();
         const initialIsGroupPacket = message.isGroupPacket === true || initialPacketMode === 'group_lucky' || initialPacketMode === 'group_average';
         if (initialIsGroupPacket) {
-            const claimResult = this._claimGroupRedPacketForCurrentUser(chatId, message);
+            const claimResult = await this._claimGroupRedPacketForCurrentUser(chatId, message);
             if (claimResult?.message) {
                 message = claimResult.message;
                 this.app.phoneShell.showNotification('领取群红包', `已领取 ¥${claimResult.amount.toFixed(2)}`, '🧧');
@@ -17873,13 +17881,9 @@ ${callTranscript}`;
         const contact = this.app.wechatData.getContactByName(message.from);
 
         if (!isMe && !isGroupPacket && !isOpened && !isRefunded) {
-            const updatedMessage = this.app.wechatData.updateMessageById(chatId, messageId, { status: 'opened' });
-            resolvedStatus = String(updatedMessage?.status || 'opened').trim();
-            isOpened = resolvedStatus === 'opened';
-            isRefunded = resolvedStatus === 'refunded';
             // 收红包，加钱
             const rpAmount = parseFloat(message.amount) || 0;
-            this.app.wechatData.updateWalletBalance(rpAmount, null, {
+            const walletAfter = await this.app.wechatData.updateWalletBalance(rpAmount, null, {
                 type: 'redpacket',
                 title: `红包收入-${String(message.from || this.app.currentChat?.name || '微信好友')}`,
                 detail: String(message.wish || '微信红包'),
@@ -17897,6 +17901,11 @@ ${callTranscript}`;
                 tavernMessageIndex: message.tavernMessageIndex,
                 batchId: message.batchId
             });
+            if (walletAfter === null) return;
+            const updatedMessage = this.app.wechatData.updateMessageById(chatId, messageId, { status: 'opened' });
+            resolvedStatus = String(updatedMessage?.status || 'opened').trim();
+            isOpened = resolvedStatus === 'opened';
+            isRefunded = resolvedStatus === 'refunded';
             this.app.phoneShell.showNotification('微信红包', `已存入零钱: ¥${rpAmount.toFixed(2)}`, '');
         }
 
@@ -18028,7 +18037,7 @@ ${callTranscript}`;
     }
 
     // 💰 打开转账详情界面
-    openTransferDetail(messageId) {
+    async openTransferDetail(messageId) {
         const chatId = this.app.currentChat?.id;
         if (!chatId) return;
         const messages = this.app.wechatData.getMessages(chatId);
@@ -18045,13 +18054,7 @@ ${callTranscript}`;
         // 对方发来的转账，如果还没被收款（用 status 记录），点击后存入钱包
         if (!isMe && resolvedStatus !== 'received' && resolvedStatus !== 'refunded') {
             transferReceivedTime = this._getTransferDetailPhoneTime(message);
-            const updatedMessage = this.app.wechatData.updateMessageById(chatId, messageId, {
-                status: 'received',
-                transferReceivedTime
-            });
-            resolvedMessage = updatedMessage || resolvedMessage;
-            resolvedStatus = String(updatedMessage?.status || 'received').trim();
-            this.app.wechatData.updateWalletBalance(parseFloat(formattedAmount), null, {
+            const walletAfter = await this.app.wechatData.updateWalletBalance(parseFloat(formattedAmount), null, {
                 type: 'transfer',
                 title: `转账收入-${String(message.from || this.app.currentChat?.name || '微信好友')}`,
                 detail: String(message.desc || '微信转账'),
@@ -18069,6 +18072,13 @@ ${callTranscript}`;
                 tavernMessageIndex: message.tavernMessageIndex,
                 batchId: message.batchId
             });
+            if (walletAfter === null) return;
+            const updatedMessage = this.app.wechatData.updateMessageById(chatId, messageId, {
+                status: 'received',
+                transferReceivedTime
+            });
+            resolvedMessage = updatedMessage || resolvedMessage;
+            resolvedStatus = String(updatedMessage?.status || 'received').trim();
             this.app.wechatData.addMessage(chatId, this._buildPaymentStatusMessage(
                 message,
                 '你已收款',
