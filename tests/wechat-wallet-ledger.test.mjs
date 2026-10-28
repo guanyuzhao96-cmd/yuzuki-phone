@@ -16,7 +16,8 @@ test('wallet ledger resets to the latest month only when the page is entered aga
 
 test('wallet page uses the overview, shortcuts, and ledger panel layout', () => {
     assert.match(source, /<div class="wechat-wallet-ledger-title">钱包<\/div>/);
-    assert.match(source, /class="wechat-wallet-ledger-stat-label">零钱余额\(元\)</);
+    assert.match(source, /MVU可用余额\(元\)/);
+    assert.match(source, /零钱余额\(元\)/);
     assert.match(source, /class="wechat-wallet-ledger-stat-label">信用卡待还\(元\)</);
     assert.match(source, /class="wechat-wallet-ledger-stat-label">借贷待还\(元\)</);
     assert.match(source, /class="wechat-wallet-shortcuts"/);
@@ -58,7 +59,7 @@ test('wallet filters retain full native select hit areas inside the ledger heade
     assert.match(source, /\.wechat-wallet-ledger-filter-label \{[\s\S]*?padding: 0 24px 0 2px;[\s\S]*?pointer-events: none;/);
     assert.match(source, /\['shopping', '线下支付'\]/);
     assert.match(source, /shopping: '线下支付'/);
-    assert.match(indexSource, /ST_PHONE_WECHAT_MODULE_REVISION = '20261020-wechat-worldbook-relationship-sync'/);
+    assert.match(indexSource, /ST_PHONE_WECHAT_MODULE_REVISION = '20261028-mvu-wallet'/);
 });
 
 test('credit-card bills are clickable and use the in-phone repayment flow', () => {
