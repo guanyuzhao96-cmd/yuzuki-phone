@@ -10,10 +10,10 @@
  * Copyright (c) yuzuki. All rights reserved.
  * ======================================================== */
 // 微信APP主程序
-import { ChatView } from './chat-view.js?v=20261028-chat-update-button-150';
+import { ChatView } from './chat-view.js?v=20261028-wallet-151';
 import { ContactsView } from './contacts-view.js?v=20261025-contact-profile-dossier-139';
 import { MomentsView } from './moments-view.js?v=20261004-moments-image-cancel';
-import { WechatData } from './wechat-data.js?v=20261025-dossier-incremental-contact-136';
+import { WechatData } from './wechat-data.js?v=20261028-wallet-151';
 import { getWalletAssetTotals, parseWalletAssetEvaluation } from './wallet-assets.js?v=20261011-wallet-credit-repayment';
 import { ImageCropper } from '../settings/image-cropper.js';
 import { formatWechatChatListTime } from './chat-list-time.js?v=20260717-wechat-list-time';
@@ -6854,6 +6854,7 @@ export class WechatApp {
         if (!['ledger', 'bank', 'credit'].includes(this._walletSection)) {
             this._walletSection = 'ledger';
         }
+        const mvuWallet = this.wechatData.getMvuWalletState();
         const balance = this.wechatData.getWalletBalance();
         const isInitialized = balance !== null;
         const displayBalance = isInitialized ? this._formatWalletNumber(balance) : '***';
@@ -6910,7 +6911,7 @@ export class WechatApp {
             .join('');
         const selectedMonthLabel = this._formatWalletMonthLabel(this._walletLedgerMonth);
         const selectedTypeLabel = typeOptionEntries.find(([value]) => value === this._walletLedgerType)?.[1] || '全部类型';
-        const evalLabel = isEvaluating ? '资产评估中' : (isInitialized ? '重新评估资产' : '初始资产评估');
+        const evalLabel = mvuWallet.active ? '刷新MVU余额' : (isEvaluating ? '资产评估中' : (isInitialized ? '重新评估资产' : '初始资产评估'));
         const lowerPanelHtml = this._walletSection === 'bank'
             ? this._renderWalletSavingsPanel(assetProfile, assetTotals)
             : (this._walletSection === 'credit'
@@ -6939,7 +6940,7 @@ export class WechatApp {
                     <div class="wechat-wallet-ledger-stats">
                         <div class="wechat-wallet-ledger-stat">
                             <span class="wechat-wallet-ledger-stat-icon"><i class="fa-solid fa-shield-halved"></i></span>
-                            <span class="wechat-wallet-ledger-stat-label">零钱余额(元)</span>
+                            <span class="wechat-wallet-ledger-stat-label">${mvuWallet.active ? 'MVU可用余额(元)' : '零钱余额(元)'}</span>
                             <strong class="wechat-wallet-ledger-stat-value ${statValueClass}">${displayBalance}</strong>
                         </div>
                         <div class="wechat-wallet-ledger-stat">
@@ -6985,7 +6986,7 @@ export class WechatApp {
         const evalBtn = currentView.querySelector('#ai-eval-wallet-btn');
         if (evalBtn) {
             evalBtn.disabled = isEvaluating;
-            evalBtn.addEventListener('click', () => this.evaluateWalletByAI());
+            evalBtn.addEventListener('click', () => mvuWallet.active ? this.showWalletPage() : this.evaluateWalletByAI());
         }
         currentView.querySelectorAll('[data-wallet-section]').forEach((button) => {
             button.addEventListener('click', () => {
@@ -7135,6 +7136,11 @@ export class WechatApp {
 
     // AI 评估完整资产
     async evaluateWalletByAI() {
+        if (this.wechatData.getMvuWalletState().active) {
+            this.showWalletPage();
+            this.phoneShell.showNotification('余额已同步', '钱包余额来自当前聊天MVU，按实际收支更新。', '✅');
+            return;
+        }
         if (this._isWalletEvaluating) {
             this.phoneShell.showNotification('资产评估中', '请稍候，正在生成评估结果...', '⏳');
             return;
