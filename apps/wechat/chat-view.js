@@ -95,7 +95,7 @@ export class ChatView {
         this.abortController = null;  // 🔥 用于中断请求
         this.batchTimer = null;  // 🔥 智能连发倒计时
         this.pendingChatIds = new Set(); // 🔥 记录等待统一发送的会话队列
-        this.pullToRefreshPendingChatIds = new Set(); // 仅在微信会话列表下拉时请求回复
+        this.pullToRefreshPendingChatIds = new Set(); // 仅在点击微信主页更新按钮时请求回复
         this.isPullToRefreshActive = false;
         this.activeQuote = null;  // 🔥 当前激活的引用消息
         this.audioPlayer = new Audio();
@@ -2985,80 +2985,33 @@ export class ChatView {
         return this.pullToRefreshPendingChatIds?.size || 0;
     }
 
-    bindChatListPullToRefresh() {
-        if (this.app.currentChat || this.app.currentView !== 'chats') return;
-        const currentView = this.getCurrentWechatView ? this.getCurrentWechatView() : document;
-        const list = currentView.querySelector('.wechat-chat-list');
-        const indicator = list?.querySelector('.wechat-chat-refresh-indicator');
-        if (!list || !indicator || list._wechatPullRefreshBound) return;
-        list._wechatPullRefreshBound = true;
-
-        let startX = 0;
-        let startY = 0;
-        let pullDistance = 0;
-        let tracking = false;
-        const threshold = 64;
-        const reset = () => {
-            tracking = false;
-            pullDistance = 0;
-            indicator.style.height = '0px';
-            indicator.classList.remove('ready', 'loading');
-            indicator.textContent = '下拉获取待回复消息';
-        };
-
-        list.addEventListener('touchstart', event => {
-            if (this.getPullToRefreshPendingCount() === 0 || list.scrollTop > 0) {
-                tracking = false;
-                return;
-            }
-            const touch = event.touches?.[0];
-            if (!touch) return;
-            startX = Number(touch.clientX || 0);
-            startY = Number(touch.clientY || 0);
-            pullDistance = 0;
-            tracking = true;
-        }, { passive: true });
-
-        list.addEventListener('touchmove', event => {
-            if (!tracking) return;
-            const touch = event.touches?.[0];
-            if (!touch) return;
-            const deltaY = Number(touch.clientY || 0) - startY;
-            const deltaX = Math.abs(Number(touch.clientX || 0) - startX);
-            if (deltaY <= 0 || deltaY <= deltaX) {
-                if (deltaX > 8 || deltaY < -8) reset();
-                return;
-            }
-            pullDistance = Math.min(88, deltaY);
-            indicator.style.height = `${Math.min(56, Math.round(pullDistance * .7))}px`;
-            const ready = pullDistance >= threshold;
-            indicator.classList.toggle('ready', ready);
-            indicator.textContent = ready ? '松开即可更新回复' : '继续下拉以更新回复';
-            if (event.cancelable && pullDistance > 6) event.preventDefault();
-        }, { passive: false });
-
-        const finish = async () => {
-            if (!tracking) return;
-            const shouldRefresh = pullDistance >= threshold;
-            tracking = false;
-            if (!shouldRefresh) { reset(); return; }
-            list._suppressChatItemClickUntil = Date.now() + 700;
-            this.isPullToRefreshActive = true;
-            indicator.classList.remove('ready');
-            indicator.classList.add('loading');
-            indicator.style.height = '44px';
-            indicator.textContent = '正在更新回复…';
-            try {
-                await this.triggerAI(null, { pullToRefresh: true });
-                indicator.textContent = '更新完成';
-            } finally {
-                this.isPullToRefreshActive = false;
-                if (!this.app.currentChat && this.app.currentView === 'chats') this.app.render();
-                setTimeout(reset, 650);
-            }
-        };
-        list.addEventListener('touchend', finish, { passive: true });
-        list.addEventListener('touchcancel', reset, { passive: true });
+    async updatePendingChats() {
+        if (this.isPullToRefreshActive || this._isFlushingPending) return;
+        if (!this.isOnlineMode()) {
+            this._notifyOnlineModeRequired();
+            return;
+        }
+        if (this._getPendingChatIdsOrdered(null, true).length === 0) {
+            this.app.phoneShell.showNotification('更新聊天', '暂无待回复消息，请先给联系人发送消息。', '💬');
+            return;
+        }
+        this.isPullToRefreshActive = true;
+        this.app.render();
+        try {
+            await this.triggerAI(null, { pullToRefresh: true });
+            const remaining = this._getPendingChatIdsOrdered(null, true).length;
+            this.app.phoneShell.showNotification(
+                remaining ? '仍有待回复消息' : '更新完成',
+                remaining ? '部分会话尚未收到回复，可再次点击“更新”重试。' : '微信聊天回复已更新。',
+                remaining ? '⚠️' : '✅'
+            );
+        } catch (error) {
+            console.error('[微信] 更新聊天失败:', error);
+            this.app.phoneShell.showNotification('更新失败', '暂时无法获取回复，请稍后点击“更新”重试。', '⚠️');
+        } finally {
+            this.isPullToRefreshActive = false;
+            if (!this.app.currentChat && this.app.currentView === 'chats') this.app.render();
+        }
     }
 
     _resetAiReplyTimeCursor() {
@@ -10813,7 +10766,7 @@ renderChatRoom(chat) {
                 this._notifyOnlineModeRequired();
                 return;
             }
-            // 手机微信消息只先排队保存；回复由会话列表下拉刷新显式触发。
+            // 手机微信消息只先排队保存；回复由微信主页更新按钮显式触发。
             clearTimeout(this.batchTimer);
             this._restartPendingTimerIfNeeded(targetChatId);
 
@@ -10825,7 +10778,7 @@ renderChatRoom(chat) {
                     this._notifyOnlineModeRequired();
                     return;
                 }
-                this.app.phoneShell.showNotification('等待更新', '返回微信会话列表，下拉即可获取回复', '⬇️');
+                this.app.phoneShell.showNotification('等待更新', '返回微信主页，点击顶部“更新”即可获取回复', '⬇️');
             } else {
                 // 倒计时已结束，检查是否有历史消息可以重试
                 const messages = this.app.wechatData.getMessages(this.app.currentChat.id);
