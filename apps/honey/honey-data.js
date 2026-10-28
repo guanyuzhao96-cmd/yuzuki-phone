@@ -9,7 +9,7 @@
  * 
  * Copyright (c) yuzuki. All rights reserved.
  * ======================================================== */
-import { WechatData } from '../wechat/wechat-data.js';
+import { WechatData } from '../wechat/wechat-data.js?v=20261028-wallet-151';
 import { GlobalSocialStore } from '../../config/global-social-store.js';
 import { applyPhoneTagFilter } from '../../config/tag-filter.js';
 
@@ -2778,7 +2778,10 @@ export class HoneyData {
         return { available: true, initialized: true, balance: num };
     }
 
-    rechargeHoneyCoinsFromWechat(yuanAmount) {
+    async rechargeHoneyCoinsFromWechat(yuanAmount) {
+        if (this._wechatExchangePending) return { success: false, reason: 'wallet_busy' };
+        this._wechatExchangePending = true;
+        try {
         const amountYuan = Number.parseFloat(yuanAmount);
         if (!Number.isFinite(amountYuan) || amountYuan <= 0) {
             return { success: false, reason: 'invalid_amount' };
@@ -2804,13 +2807,14 @@ export class HoneyData {
 
         const wechatData = this._getWechatDataForRecharge();
         const coinGain = Math.max(1, Math.round(safeAmountYuan * 10));
-        wechatData?.updateWalletBalance?.(-safeAmountYuan, null, {
+        const walletAfter = await wechatData.updateWalletBalance(-safeAmountYuan, null, {
             type: 'honey',
             title: '蜜语充值',
             detail: `充值 ${coinGain} 蜜币`,
             source: 'honey',
-            referenceId: `honey:recharge:${Date.now()}:${safeAmountYuan}`
+            referenceId: `honey:recharge:${Date.now()}:${Math.random().toString(36).slice(2, 10)}:${safeAmountYuan}`
         });
+        if (walletAfter === null) return { success: false, reason: 'wallet_sync_failed' };
 
         const balanceBefore = this.getHoneyCoinBalance();
         const balanceAfter = this.updateHoneyCoinBalance(coinGain);
@@ -2822,9 +2826,13 @@ export class HoneyData {
             balanceBefore,
             balanceAfter
         };
+            } finally { this._wechatExchangePending = false; }
     }
 
-    withdrawHoneyCoinsToWechat(coinAmount) {
+    async withdrawHoneyCoinsToWechat(coinAmount) {
+        if (this._wechatExchangePending) return { success: false, reason: 'wallet_busy' };
+        this._wechatExchangePending = true;
+        try {
         const coins = Math.max(0, Math.floor(Number.parseFloat(coinAmount) || 0));
         if (coins <= 0) {
             return { success: false, reason: 'invalid_amount' };
@@ -2853,14 +2861,15 @@ export class HoneyData {
             return { success: false, reason: 'wechat_unavailable' };
         }
         const amountYuan = Math.round((coins / 10) * 100) / 100;
-        const balanceAfter = this.setHoneyCoinBalance(balanceBefore - coins);
-        wechatData.updateWalletBalance(amountYuan, null, {
+        const walletResult = await wechatData.updateWalletBalance(amountYuan, null, {
             type: 'honey',
             title: '蜜语提现',
             detail: `提现 ${coins} 蜜币`,
             source: 'honey',
-            referenceId: `honey:withdraw:${Date.now()}:${coins}`
+            referenceId: `honey:withdraw:${Date.now()}:${Math.random().toString(36).slice(2, 10)}:${coins}`
         });
+        if (walletResult === null) return { success: false, reason: 'wallet_sync_failed' };
+        const balanceAfter = this.setHoneyCoinBalance(balanceBefore - coins);
         const walletAfterRaw = wechatData.getWalletBalance?.();
         const walletAfter = Number.isFinite(Number(walletAfterRaw)) ? Number(walletAfterRaw) : amountYuan;
 
@@ -2872,6 +2881,7 @@ export class HoneyData {
             balanceAfter,
             walletAfter
         };
+            } finally { this._wechatExchangePending = false; }
     }
 
     getFollowedHosts() {
