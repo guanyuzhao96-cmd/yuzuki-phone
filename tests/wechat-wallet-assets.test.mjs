@@ -133,7 +133,7 @@ test('asset evaluation persists the full profile and re-evaluation clears ledger
     const firstProfile = parseWalletAssetEvaluation(standardEvaluation);
 
     await data.applyWalletAssetEvaluation(firstProfile);
-    data.updateWalletBalance(-3.65);
+    await data.updateWalletBalance(-3.65);
     data.data.walletTransactions.push({
         id: 'wallet-test-transaction',
         delta: -3.65,
@@ -263,13 +263,13 @@ test('manual credit-card repayment uses exactly one selected account and records
 test('chat payments can use wallet or savings accounts and always appear in the WeChat ledger', async () => {
     const data = await createRepaymentData({ walletBalance: 150, savingsBalances: [500] });
 
-    const walletPayment = data.spendFromPaymentSource(25, 'wallet', null, {
+    const walletPayment = await data.spendFromPaymentSource(25, 'wallet', null, {
         type: 'transfer',
         title: '转账-测试好友',
         detail: '晚餐',
         referenceId: 'test-wallet-payment'
     });
-    const bankPayment = data.spendFromPaymentSource(80, 'bank:0:1000', null, {
+    const bankPayment = await data.spendFromPaymentSource(80, 'bank:0:1000', null, {
         type: 'redpacket',
         title: '红包支出-测试好友',
         detail: '恭喜发财',
