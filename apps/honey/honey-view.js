@@ -5280,7 +5280,7 @@ export class HoneyView {
             openRechargeModal();
         });
 
-        root.querySelector('#honey-open-withdraw')?.addEventListener('click', () => {
+        root.querySelector('#honey-open-withdraw')?.addEventListener('click', async () => {
             const coinBalance = this.app?.honeyData?.getHoneyCoinBalance?.() || 0;
             if (coinBalance <= 0) {
                 this.app.phoneShell.showNotification('提现失败', '当前蜜语金币余额为 0', 'ℹ️');
@@ -5291,7 +5291,7 @@ export class HoneyView {
             if (inputText === null) return;
 
             const withdrawCoins = Math.max(0, Math.floor(Number.parseFloat(String(inputText).trim()) || 0));
-            const result = this.app?.honeyData?.withdrawHoneyCoinsToWechat?.(withdrawCoins);
+            const result = await this.app?.honeyData?.withdrawHoneyCoinsToWechat?.(withdrawCoins);
             if (!result?.success) {
                 if (result?.reason === 'coin_insufficient') {
                     this.app.phoneShell.showNotification('提现失败', `金币不足，当前仅 ${this._formatCoinDisplay(result.balanceBefore || 0)} 金币`, '⚠️');
@@ -5342,9 +5342,9 @@ export class HoneyView {
             );
         });
 
-        root.querySelector('#honey-confirm-recharge')?.addEventListener('click', () => {
+        root.querySelector('#honey-confirm-recharge')?.addEventListener('click', async () => {
             const yuan = Number.parseFloat(rechargeInput?.value || '0');
-            const result = this.app?.honeyData?.rechargeHoneyCoinsFromWechat?.(yuan);
+            const result = await this.app?.honeyData?.rechargeHoneyCoinsFromWechat?.(yuan);
             if (!result?.success) {
                 if (result?.reason === 'wallet_insufficient') {
                     this.app.phoneShell.showNotification(
@@ -7244,14 +7244,14 @@ export class HoneyView {
         });
         closeBtn?.addEventListener('click', closeSettlement);
 
-        withdrawBtn?.addEventListener('click', () => {
+        withdrawBtn?.addEventListener('click', async () => {
             if (!this._activeLiveSettlement || this._activeLiveSettlement.withdrawn) return;
             if (incomeCoins <= 0) {
                 this.app?.phoneShell?.showNotification?.('提现失败', '本次直播暂无可提现收益', 'ℹ️');
                 return;
             }
 
-            const result = this.app?.honeyData?.withdrawHoneyCoinsToWechat?.(incomeCoins);
+            const result = await this.app?.honeyData?.withdrawHoneyCoinsToWechat?.(incomeCoins);
             if (!result?.success) {
                 if (result?.reason === 'coin_insufficient') {
                     this.app?.phoneShell?.showNotification?.('提现失败', '当前蜜语金币不足，无法提现', '⚠️');
