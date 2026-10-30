@@ -80,6 +80,71 @@ export function buildCharacters(books) {
     }
     return result;
 }
+
+/** The collection membership belongs to MVU; worldbooks only enrich these rows. */
+export function listMvuCharacters(value) {
+    const roles = unwrapMvuData(value)?.roles;
+    if (!roles || typeof roles !== 'object' || Array.isArray(roles)) return [];
+    return Object.entries(roles).filter(([id, role]) => !id.startsWith('$')
+        && role && typeof role === 'object' && !Array.isArray(role))
+        .map(([mvuId, role]) => ({
+            mvuId,
+            name: clean([role.role_name, role.姓名, role.name].find(name => typeof name === 'string' && name.trim()) || mvuId)
+        })).filter(role => role.name);
+}
+
+export function buildMvuCharacters(books, value) {
+    const roster = listMvuCharacters(value);
+    const names = new Set(roster.map(role => role.name));
+    const sourcesByName = new Map([...names].map(name => [name, []]));
+    const directoriesByName = new Map([...names].map(name => [name, []]));
+    for (const book of books || []) {
+        const entries = Array.isArray(book.entries) ? book.entries : Object.values(book.entries || {});
+        for (const entry of entries) {
+            const content = String(entry.content || '');
+            const isDirectory = /^CWB目录/.test(entry.comment || '') || /【小故事线目录】/.test(content);
+            if (isDirectory) {
+                for (const match of content.matchAll(/^\s*姓名\s*[:：]\s*(.+?)\s*$/gm)) {
+                    const name = clean(match[1]);
+                    if (names.has(name)) directoriesByName.get(name).push({ book: book.name, uid: entry.uid, comment: entry.comment });
+                }
+                continue;
+            }
+            const declared = content.match(/^\s*(?:\[姓名\]|姓名)\s*[:：]\s*(.+?)\s*$/m);
+            const title = clean(entry.comment).replace(/^动态-/, '');
+            const name = declared ? clean(declared[1]) : title;
+            if (!names.has(name)) continue;
+            const fields = parseFields(content);
+            sourcesByName.get(name).push({
+                ...entry, book: book.name, fields,
+                sourceKey: JSON.stringify([book.name, String(entry.uid ?? '')]),
+                type: /\[--角色档案开始--\]/.test(content) || /^动态-/.test(entry.comment) ? 'dynamic' : 'static'
+            });
+        }
+    }
+    const relationships = parseCharacterRelationships(books || []);
+    const counts = new Map();
+    for (const item of relationships) {
+        counts.set(item.left, (counts.get(item.left) || 0) + 1);
+        counts.set(item.right, (counts.get(item.right) || 0) + 1);
+    }
+    const ranked = [...counts].sort((a,b) => b[1]-a[1]);
+    const protagonistName = ranked[0]?.[1] >= 2 && (!ranked[1] || ranked[0][1] > ranked[1][1]) ? ranked[0][0] : '';
+    return roster.map(({mvuId, name}) => {
+        const sources = sourcesByName.get(name) || [];
+        const directories = directoriesByName.get(name) || [];
+        const bookNames = [...new Set([...sources, ...directories].map(source => source.book))];
+        const otherRelationships = relationships.filter(item => (item.left === name || item.right === name)
+            && (item.left === name ? item.right : item.left) !== protagonistName);
+        return {
+            id: JSON.stringify(['mvu', mvuId]), mvuId, name, sources, directories,
+            legacyIds: bookNames.map(book => JSON.stringify([book, name])),
+            book: bookNames.join('、'), otherRelationships, protagonistName,
+            relationshipSources: [...new Map(otherRelationships.map(item => [JSON.stringify([item.book,item.comment,item.uid]), item])).values()]
+        };
+    });
+}
+
 export function parseCharacterRelationships(books) {
     const latest = new Map();
     for (const book of books || []) {
@@ -196,7 +261,13 @@ export function latestMvuSnapshot(api, chat = []) {
         try {
             const data = unwrapMvuData(api({ type: 'message', message_id: 'latest' }));
             if (data) return { data, floor: '最新', source: 'MVU' };
-        } catch (_) { /* Fall back to the current chat's serialized message data. */ }
+        } catch (_) { /* Try numbered message floors before serialized data. */ }
+        for (let floor = (chat || []).length - 1; floor >= 0; floor--) {
+            try {
+                const data = unwrapMvuData(api({ type: 'message', message_id: floor }));
+                if (data) return { data, floor, source: 'MVU' };
+            } catch (_) {}
+        }
     }
     return latestMvu(chat);
 }
