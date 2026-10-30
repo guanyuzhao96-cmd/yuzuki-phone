@@ -39,11 +39,11 @@ import {
 } from './apps/mofo/mofo-renderer.js';
 
 const ST_PHONE_BASE_URL = new URL('./', import.meta.url).href;
-const ST_PHONE_VERSION = '1.6.52';
+const ST_PHONE_VERSION = '1.6.53';
 const ST_PHONE_CSS_REVISION = '20261020-ios-complete-theme-v3';
 const ST_PHONE_APP_SWIPE_REVISION = '20261002-wechat-chat-return';
 const ST_PHONE_ALBUM_MODULE_REVISION = '20261006-story-image-outside-close';
-const ST_PHONE_WECHAT_MODULE_REVISION = '20261028-mvu-wallet';
+const ST_PHONE_WECHAT_MODULE_REVISION = '20261030-mvu-chat-media';
 const ST_PHONE_WEIBO_MODULE_REVISION = '20261002-first-return-guard';
 const ST_PHONE_X_MODULE_REVISION = '20261010-publish-guard';
 const ST_PHONE_HONEY_ASSET_REVISION = '20261028-mvu-wallet';
@@ -150,9 +150,10 @@ const ST_PHONE_CURRENT_UPDATE = {
     version: ST_PHONE_VERSION,
     date: '2026-10-30',
     items: [
-        "【角色图鉴】先读取当前聊天最新MVU的roles作为角色名单，再按正式姓名匹配静态档案、动态档案与角色关系；不在MVU中的角色不再由世界书目录自动加入。",
-        "【资料读取】包含未激活世界书；MVU角色缺少世界书档案时继续显示，已有MVU字段优先，缺项再读取对应档案。保留已有头像与来源偏好。",
-        "【性能】初次来源扫描限制四路并发，后台刷新只重读相关世界书；手动刷新和世界书更新重新检索。"
+        "【微信特殊消息】普通文字的禁旁白规则不再压制图片、表情包、红包与转账；每次线上请求独立补齐原版特殊消息协议，兼容精简自定义预设。",
+        "【角色行为】每次请求单独读取最新MVU好感度、欲望值、堕落值及关系目标，参考当前角色卡的世界书规则和角色专属阶段条件；完整档案关闭时仍注入当前状态。",
+        "【顶部好感度】单聊标题下显示当前角色MVU好感度，支持0、负值与缺失提示；轻量更新读数，不重建聊天消息区。",
+        "【资料读取】已登记MVU角色允许匹配静态档案与未激活世界书，当前角色卡绑定的三值规则优先；修复默认微信提示词用户名占位符。"
 ]
 };
 
@@ -1472,7 +1473,7 @@ if (window.GGP_Loaded) {
             import('./config/storage.js?v=20261006-story-upload-console-cleanup'),
             import('./config/api-manager.js?v=20261009-unified-sse-parser'),
             import('./config/time-manager.js'),    // 👈 取消懒加载
-        import('./config/prompt-manager.js?v=20261002-x-follower-sync'),  // 👈 取消懒加载
+        import('./config/prompt-manager.js?v=20261030-mvu-chat-media'),  // 👈 取消懒加载
             import('./config/tts-manager.js?v=20260607-mimo-relay-worker'),
         import('./config/image-generation-manager.js?v=20261006-nai-queue-lock-retry'),
             import('./config/worldbook-manager.js')
