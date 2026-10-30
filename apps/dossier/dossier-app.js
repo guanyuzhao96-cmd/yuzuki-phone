@@ -1,5 +1,5 @@
 import { WorldbookManager } from '../../config/worldbook-manager.js';
-import { buildCharacters, escapeHtml as e, findMvuRole, flattenMvu, formatMvuValue, latestMvuSnapshot, MVU_ROLE_FIELDS, visibleFields } from './dossier-data.js';
+import { buildMvuCharacters, listMvuCharacters, escapeHtml as e, findMvuRole, formatMvuValue, latestMvuSnapshot, visibleFields } from './dossier-data.js?v=20261030-mvu-roster-152';
 
 const KEY = 'chat_dossier_preferences';
 const css = `
@@ -35,6 +35,33 @@ export class DossierApp {
         return JSON.stringify([ctx.characterId, ctx.groupId, ctx.chatId, ctx.chatMetadata?.file_name]);
     }
     prefs() { return this.storage.get(KEY, {}) || {}; }
+    readMvu() {
+        const ctx = this.context();
+        let api = ctx.Mvu || window.Mvu;
+        try { api ||= window.parent?.Mvu; } catch (_) {}
+        return latestMvuSnapshot(typeof api?.getMvuData === 'function' ? args => api.getMvuData(args) : null, ctx.chat);
+    }
+    mvuMatch(role) {
+        const value = this.mvu?.data?.roles?.[role.mvuId];
+        return value && typeof value === 'object' && !Array.isArray(value)
+            ? { status: 'matched', id: role.mvuId, role: value }
+            : findMvuRole(this.mvu?.data, role.name);
+    }
+    rolePrefs(role, kind) {
+        const group = this.prefs()[kind] || {};
+        if (group[role.id] !== undefined) return group[role.id];
+        for (const legacyId of role.legacyIds || []) {
+            if (group[legacyId] === undefined) continue;
+            if (kind !== 'sources') return group[legacyId];
+            const book = JSON.parse(legacyId)[0];
+            return Object.fromEntries(Object.entries(group[legacyId]).map(([type, uid]) => {
+                const source = role.sources.find(source => source.book === book && source.type === type && String(source.uid) === String(uid));
+                return [type, source?.sourceKey || uid];
+            }));
+        }
+        return kind === 'avatars' ? '' : {};
+    }
+
     save(patch) { this.storage.set(KEY, { ...this.prefs(), ...patch }); }
     isActive() {
         const panel = document.getElementById('phone-panel');
@@ -58,7 +85,8 @@ export class DossierApp {
             if (ctx.event_types?.[name]) ctx.eventSource?.on(ctx.event_types[name], () => {
                 if (!this.isActive()) return;
                 clearTimeout(this.debounce);
-                this.debounce = setTimeout(() => this.refresh(), 700);
+                if (name === 'WORLDINFO_UPDATED') this.discovery = null;
+                this.debounce = setTimeout(() => this.refresh(true), 700);
             });
         }
     }
@@ -80,6 +108,7 @@ export class DossierApp {
         this.books = [];
         this.indexes = [];
         this.mvu = null;
+        this.discovery = null;
         this.errors = [];
         this.readAt = null;
         if (this.isActive()) { this.draw(); queueMicrotask(() => this.refresh()); }
@@ -91,7 +120,7 @@ export class DossierApp {
         this.selected = null;
         this.draw();
         clearInterval(this.timer);
-        // Resolve currently attached worldbooks afresh, then follow their CWB directories.
+        // MVU owns membership. Refresh only relevant worldbooks after discovery.
         this.timer = setInterval(() => { if (this.isActive() && !this.settings) this.refresh(true); }, 20000);
         await this.refresh();
     }
@@ -103,25 +132,70 @@ export class DossierApp {
         const scope = this.scope();
         if (!quiet) this.draw();
         try {
-            const names = await this.manager.getDossierDefaultBooks();
-            const results = await Promise.allSettled(names.map(name => this.manager.readDossierWorldbook(name)));
-            const ctx = this.context();
-            const mvuApi = ctx.Mvu || window.Mvu || window.parent?.Mvu;
-            const getMvuData = typeof mvuApi?.getMvuData === 'function'
-                ? args => mvuApi.getMvuData(args)
-                : null;
-            const mvu = latestMvuSnapshot(getMvuData, ctx.chat);
+            const mvu = this.readMvu();
+            const roster = listMvuCharacters(mvu?.data);
+            const rosterKey = JSON.stringify(roster);
+            if (!roster.length) {
+                this.characters = []; this.books = []; this.indexes = [];
+                this.errors = []; this.mvu = mvu; this.selected = null;
+                this.discovery = null; this.signature = '';
+                this.readAt = new Date().toLocaleTimeString();
+                this.loading = false; this.draw();
+                return;
+            }
+            if (!this.discovery || this.discovery.scope !== scope || this.discovery.rosterKey !== rosterKey) {
+                this.discovery = { scope, rosterKey, checked: new Map() };
+            }
+            const discovery = this.discovery;
+            const [attached, available] = await Promise.allSettled([
+                this.manager.getDossierDefaultBooks(),
+                this.manager.fetchAllAvailableWorldBooks?.() || []
+            ]);
             if (token !== this.sequence || scope !== this.scope() || !this.active) return;
-            this.books = names;
-            this.errors = results.flatMap((result, i) => result.status === 'rejected' ? [`${names[i]}：${result.reason.message}`] : []);
-            const loaded = results.filter(r => r.status === 'fulfilled').map(r => r.value);
-            const characters = buildCharacters(loaded);
-            this.indexes = loaded.flatMap(book => book.entries.filter(entry => /^CWB目录/.test(entry.comment || '') || /【小故事线目录】/.test(entry.content || '')).map(entry => ({ book: book.name, ...entry })));
-            const signature = JSON.stringify([names, this.indexes, characters, mvu, this.errors]);
+            const names = [...new Set([
+                ...(attached.status === 'fulfilled' ? attached.value : []),
+                ...(available.status === 'fulfilled' ? available.value.map(book => book.name) : [])
+            ].filter(Boolean))];
+            const toRead = names.filter(name => !quiet || discovery.checked.get(name) !== false);
+            const loaded = [], errors = [];
+            for (const result of [attached, available]) {
+                if (result.status === 'rejected') errors.push(String(result.reason?.message || result.reason));
+            }
+            // Bound parallel reads so an initial scan does not flood mobile Tavern.
+            for (let offset = 0; offset < toRead.length; offset += 4) {
+                const batch = toRead.slice(offset, offset + 4);
+                const results = await Promise.allSettled(batch.map(name => this.manager.readDossierWorldbook(name)));
+                if (token !== this.sequence || scope !== this.scope() || !this.active) return;
+                results.forEach((result, i) => {
+                    if (result.status === 'rejected') {
+                        errors.push(batch[i] + '：' + String(result.reason?.message || result.reason));
+                        return;
+                    }
+                    const book = result.value;
+                    const matches = buildMvuCharacters([book], mvu.data);
+                    const relevant = matches.some(role => role.sources.length || role.directories.length || role.otherRelationships.length);
+                    discovery.checked.set(batch[i], relevant);
+                    if (relevant) loaded.push(book);
+                });
+            }
+            const latest = this.readMvu();
+            if (JSON.stringify(listMvuCharacters(latest?.data)) !== rosterKey) {
+                this.loading = false;
+                queueMicrotask(() => this.refresh(true));
+                return;
+            }
+            this.books = loaded.map(book => book.name);
+            this.errors = errors;
+            const characters = buildMvuCharacters(loaded, latest?.data);
+            this.indexes = loaded.flatMap(book => (Array.isArray(book.entries) ? book.entries : Object.values(book.entries || {}))
+                .filter(entry => /^CWB目录/.test(entry.comment || '') || /【小故事线目录】/.test(entry.content || ''))
+                .map(entry => ({ book: book.name, ...entry })));
+            const signature = JSON.stringify([this.books, this.indexes, characters, latest, this.errors]);
             const changed = signature !== this.signature;
             this.signature = signature;
             this.characters = characters;
-            this.mvu = mvu;
+            this.mvu = latest;
+            if (this.selected && !characters.some(role => role.id === this.selected)) this.selected = null;
             this.readAt = new Date().toLocaleTimeString();
             this.loading = false;
             if (changed || !quiet) this.draw();
@@ -150,13 +224,13 @@ export class DossierApp {
     }
 
     details(role) {
-        const sourcePrefs = this.prefs().sources?.[role.id] || {};
-        const choose = type => { const candidates = role.sources.filter(s => s.type === type); return { candidates, source: candidates.length === 1 ? candidates[0] : candidates.find(s => String(s.uid) === sourcePrefs[type]) }; };
+        const sourcePrefs = this.rolePrefs(role, 'sources');
+        const choose = type => { const candidates = role.sources.filter(s => s.type === type); return { candidates, source: candidates.length === 1 ? candidates[0] : candidates.find(s => s.sourceKey === sourcePrefs[type]) }; };
         const staticChoice = choose('static'), dynamicChoice = choose('dynamic');
         const staticSource = staticChoice.source, dynamicSource = dynamicChoice.source;
         const staticFields = staticSource ? visibleFields(staticSource.fields) : [];
         const dynamicFields = dynamicSource ? visibleFields(dynamicSource.fields) : [];
-        const match = findMvuRole(this.mvu?.data, role.name), mvu = match.role || {};
+        const match = this.mvuMatch(role), mvu = match.role || {};
         const fieldValue = (fields, labels) => { const f = fields.find(x => labels.includes(x.label)); return f ? f.value : ''; };
         const mvuValue = (...keys) => { for (const key of keys) if (mvu[key] !== undefined && mvu[key] !== null && mvu[key] !== '') return mvu[key]; return ''; };
         const fmt = value => typeof value === 'object' ? formatMvuValue(value) : String(value ?? '');
@@ -168,8 +242,12 @@ export class DossierApp {
             ['堕落值', mvuValue('堕落值','depravity')],
             ['与主角关系', mvuValue('与主角的关系','与主角关系','relationship') || fieldValue(staticFields,['当前关系'])]
         ].filter(item=>item[1]!==undefined&&item[1]!==null&&item[1]!=='');
-        const identityText=fieldValue(staticFields,['身份']);
-        const professionMajor=fieldValue(staticFields,['职业/专业','职业','专业','专业方向'])||(()=>{
+        const basicValue = labels => {
+            const value = mvuValue(...labels);
+            return value !== '' ? value : fieldValue(staticFields, labels);
+        };
+        const identityText=basicValue(['身份']);
+        const professionMajor=basicValue(['职业/专业','职业','专业','专业方向'])||(()=>{
             const parts=[];
             const explicitMajor=identityText.match(/(?:主修|专业(?:是|为)?)\\s*([^，,。；;]+)/);
             const study=identityText.match(/(?:潍坊学院)?([^，,。；;]{2,18}?)(?:大[一二三四]学生)/);
@@ -180,15 +258,17 @@ export class DossierApp {
             return parts.join(' · ')||identityText.slice(0,30);
         })();
         const basics = [
-            ['年龄',fieldValue(staticFields,['年龄'])],
-            ['身高',fieldValue(staticFields,['身高'])],
-            ['罩杯',fieldValue(staticFields,['罩杯'])],
-            ['颜值分数',fieldValue(staticFields,['颜值','颜值分数'])],
-            ['角色等级',fieldValue(staticFields,['角色等级','等级'])],
+            ['年龄',basicValue(['年龄'])],
+            ['身高',basicValue(['身高'])],
+            ['罩杯',basicValue(['罩杯'])],
+            ['颜值分数',basicValue(['颜值','颜值分数'])],
+            ['角色等级',basicValue(['角色等级','等级'])],
             ['职业 / 专业',professionMajor]
         ].filter(item=>item[1]).map(item=>'<div class="basic-item"><div class="basic-label">'+e(item[0])+'</div><div class="basic-value">'+e(item[0]==='角色等级'?String(item[1]).toUpperCase():item[1])+'</div></div>').join('');
         const privateFields=[];
         const appendPrivate=(label, aliases, preferred) => {
+            const current = mvuValue(...aliases);
+            if (current !== '') { privateFields.push({label,value:fmt(current)}); return; }
             const sources=preferred==='dynamic'?[dynamicFields,staticFields]:[staticFields,dynamicFields];
             for(const list of sources){const value=fieldValue(list,aliases);if(value){privateFields.push({label,value});return;}}
         };
@@ -210,14 +290,14 @@ export class DossierApp {
         const relationHtml=relations.length?this.section('与其他角色的关系',relations):'';
         const plot=unique(dynamicFields.filter(f=>f.label==='剧情')).map((f,i)=>({...f,label:'记录 '+(i+1)}));
         const plotHtml=plot.length?this.section('剧情',plot):'';
-        const picker=(type,title,choice)=>choice.candidates.length>1?'<label>'+e(title)+'<select data-source="'+type+'"><option value="">选择来源</option>'+choice.candidates.map(s=>'<option value="'+e(s.uid)+'" '+(s===choice.source?'selected':'')+'>'+e(s.comment)+' · UID '+e(s.uid)+'</option>').join('')+'</select></label>':'';
+        const picker=(type,title,choice)=>choice.candidates.length>1?'<label>'+e(title)+'<select data-source="'+type+'"><option value="">选择来源</option>'+choice.candidates.map(s=>'<option value="'+e(s.sourceKey)+'" '+(s===choice.source?'selected':'')+'>'+e(s.book)+' / '+e(s.comment)+' · UID '+e(s.uid)+'</option>').join('')+'</select></label>':'';
         const sourceName=source=>source?e(source.book||role.book)+' / '+e(source.comment)+' · UID '+e(source.uid):'未找到对应档案条目';
         const relationshipSource=[...new Map(relations.map(r=>[r.source,r.source])).keys()].join('<br>')||'未找到角色关系汇总条目';
         const mvuSource=match.status==='matched'?'最新 MVU · roles['+e(match.id)+']':'未匹配到该角色的 MVU';
         const sourceTable='<details class="profile-group"><summary>数据来源</summary><div class="fields"><table class="source-table"><thead><tr><th>展示内容</th><th>数据来源</th></tr></thead><tbody>'+
-            '<tr><td>姓名、年龄、身高、罩杯、颜值、角色等级、职业/专业</td><td>'+sourceName(staticSource)+'</td></tr>'+
+            '<tr><td>姓名、年龄、身高、罩杯、颜值、角色等级、职业/专业</td><td>优先 '+mvuSource+'；缺项回退：'+sourceName(staticSource)+'</td></tr>'+
             '<tr><td>好感度、性欲值、堕落值、与主角关系</td><td>'+mvuSource+(match.status==='matched'?' · 好感度 / 欲望值 / 堕落值 / 与主角的关系':'')+'</td></tr>'+
-            '<tr><td>性经历人数、性经历人员、性癖、秘密</td><td>'+sourceName(dynamicSource)+'；缺项回退：'+sourceName(staticSource)+'</td></tr>'+
+            '<tr><td>性经历人数、性经历人员、性癖、秘密</td><td>优先 '+mvuSource+'；缺项回退：'+sourceName(dynamicSource)+'；缺项回退：'+sourceName(staticSource)+'</td></tr>'+
             '<tr><td>知道的事、未知的事、剧情</td><td>'+sourceName(dynamicSource)+'</td></tr>'+
             '<tr><td>与其他角色的关系</td><td>'+relationshipSource+'</td></tr>'+
             '</tbody></table></div></details>';
@@ -233,9 +313,9 @@ export class DossierApp {
         if (!this.active) return;
         const role = this.characters.find(c => c.id === this.selected);
         let body;
-        if (this.settings) body = `<h2>目录索引</h2><p>自动关联当前聊天、角色及全局启用的世界书，通过目录中的完整姓名定位角色资料。</p><small>关联 ${this.books.length} 本世界书，识别 ${(this.indexes || []).length} 个目录，列出 ${this.characters.length} 个角色。</small>${(this.indexes || []).map(index => `<article><strong>${e(index.comment)}</strong><small>${e(index.book)} · UID ${e(index.uid)}</small><pre>${e(index.content)}</pre></article>`).join('')}${this.books.length ? `<details><summary>已检查的关联世界书</summary>${this.books.map(name => `<p>${e(name)}</p>`).join('')}</details>` : '<p>当前聊天没有可识别的关联世界书，请检查酒馆中的世界书绑定。</p>'}`;
+        if (this.settings) body = `<h2>目录索引</h2><p>先读取当前聊天最新MVU的roles角色名单，再按完整姓名匹配世界书资料，包含未激活世界书。世界书资料缺失时保留MVU角色。</p><small>关联 ${this.books.length} 本世界书，识别 ${(this.indexes || []).length} 个目录，列出 ${this.characters.length} 个角色。</small>${(this.indexes || []).map(index => `<article><strong>${e(index.comment)}</strong><small>${e(index.book)} · UID ${e(index.uid)}</small><pre>${e(index.content)}</pre></article>`).join('')}${this.books.length ? `<details><summary>已检查的关联世界书</summary>${this.books.map(name => `<p>${e(name)}</p>`).join('')}</details>` : '<p>尚未匹配到对应的世界书资料；已记录的MVU角色仍会显示。</p>'}`;
         else if (role) body = this.details(role);
-        else body = `<div class="catalog-heading"><span class="catalog-kicker">CHARACTER COLLECTION</span><h2>角色图鉴</h2><small>动态角色档案 · ${this.characters.length} 位</small></div><input type="search" placeholder="搜索姓名、职业、身份或关系" aria-label="搜索角色" value="${e(this.search || '')}" data-search><div class="catalog-tools"><span>按角色卡片浏览完整档案</span><select data-sort aria-label="角色排序"><option value="name">按姓名</option><option value="affection">按好感度</option><option value="beauty">按颜值从高到低</option><option value="depravity">按堕落值从高到低</option><option value="grade">按角色等级从高到低</option><option value="height">按身高从高到低</option><option value="cup">按罩杯从大到小</option></select></div><div data-role-list>${this.roleList()}</div>${!this.characters.length ? '<article>尚未发现包含动态资料的角色。可在“来源”查看目录与世界书读取状态。</article>' : ''}`;
+        else body = `<div class="catalog-heading"><span class="catalog-kicker">CHARACTER COLLECTION</span><h2>角色图鉴</h2><small>MVU 已记录角色 · ${this.characters.length} 位</small></div><input type="search" placeholder="搜索姓名、职业、身份或关系" aria-label="搜索角色" value="${e(this.search || '')}" data-search><div class="catalog-tools"><span>按角色卡片浏览完整档案</span><select data-sort aria-label="角色排序"><option value="name">按姓名</option><option value="affection">按好感度</option><option value="beauty">按颜值从高到低</option><option value="depravity">按堕落值从高到低</option><option value="grade">按角色等级从高到低</option><option value="height">按身高从高到低</option><option value="cup">按罩杯从大到小</option></select></div><div data-role-list>${this.roleList()}</div>${!this.characters.length ? '<article>当前MVU尚未记录角色。角色写入roles后，刷新即可显示；有世界书档案但未进入MVU的角色不列入图鉴。</article>' : ''}`;
         this.phoneShell.setContent(`<style>${css}</style><div class="yzp-dossier"><header><button data-action="back" aria-label="返回">‹</button><strong>角色档案</strong><button data-action="settings">来源</button><button data-action="refresh" ${this.loading ? 'disabled' : ''}>${this.loading ? '读取中' : '刷新'}</button></header><main>${this.errors.map(error => `<p class="warning">${e(error)}</p>`).join('')}${body}<small>只读 · 世界书与 MVU 的原始内容不会被修改</small></main></div>`, 'dossier-main');
         const root = document.querySelector('.phone-view-current .yzp-dossier') || document.querySelector('.yzp-dossier');
         if (!root) return;
@@ -246,7 +326,7 @@ export class DossierApp {
         const sort = root.querySelector('[data-sort]');
         if (sort) { sort.value = this.sort || 'name'; sort.onchange = event => { this.sort = event.target.value; root.querySelector('[data-role-list]').innerHTML = this.roleList(); }; }
         root.querySelectorAll('[data-source]').forEach(select => { select.onchange = () => {
-            const sources = { ...this.prefs().sources, [role.id]: { ...this.prefs().sources?.[role.id], [select.dataset.source]: select.value } };
+            const sources = { ...this.prefs().sources, [role.id]: { ...this.rolePrefs(role, 'sources'), [select.dataset.source]: select.value } };
             this.save({ sources }); this.draw();
         }; });
     }
@@ -296,20 +376,24 @@ export class DossierApp {
         const cupOrder = ['AA','A','B','C','D','E','F','G','H','I','J','K'];
         const records = this.characters.map(role => {
             const fields = role.sources.flatMap(source => source.fields || []);
-            const mvu = findMvuRole(this.mvu?.data, role.name);
+            const mvu = this.mvuMatch(role);
             const findField = pattern => fields.find(field => pattern.test(field.label))?.value || '';
             const findExact = labels => fields.find(field => labels.includes(field.label))?.value || '';
             const relationship = mvu.role?.['与主角的关系'] ?? mvu.role?.['与主角关系'] ?? mvu.role?.relationship ?? findField(/与主角关系|当前关系|关系/);
             const affection = mvu.role?.['好感度'] ?? mvu.role?.affection;
             const depravity = mvu.role?.['堕落值'] ?? mvu.role?.depravity;
-            const beauty = numberFrom(findExact(['颜值','颜值分数']));
-            const height = numberFrom(findExact(['身高']));
-            const grade = String(findExact(['角色等级','等级'])).trim().toUpperCase();
+            const currentField = labels => {
+                const value = labels.map(label => mvu.role?.[label]).find(value => value !== undefined && value !== null && value !== '');
+                return value !== undefined ? value : findExact(labels);
+            };
+            const beauty = numberFrom(currentField(['颜值','颜值分数']));
+            const height = numberFrom(currentField(['身高']));
+            const grade = String(currentField(['角色等级','等级'])).trim().toUpperCase();
             const gradeRank = gradeOrder.indexOf(grade);
-            const cupText = String(findExact(['罩杯'])).toUpperCase();
+            const cupText = String(currentField(['罩杯'])).toUpperCase();
             const cup = cupText.match(/AA|[A-K]/)?.[0] || '';
             const cupRank = cupOrder.indexOf(cup);
-            const savedAvatar = this.prefs().avatars?.[role.id] || '';
+            const savedAvatar = this.rolePrefs(role, 'avatars');
             const avatarField = findExact(['头像','头像URL','头像链接','角色头像','立绘']);
             const avatarCandidate = savedAvatar || avatarField;
             const avatar = /^(https?:\/\/|data:image\/|\/)/i.test(String(avatarCandidate)) ? String(avatarCandidate) : '';
