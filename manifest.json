@@ -3,7 +3,7 @@
     "name": "yuzuki-phone",
     "description": "基于柚月手机的角色档案、任务、校园论坛与系统商店模块：读取世界书和 MVU，展示论坛与商店数据，并通过当前聊天提交互动请求。统一 iOS 风格界面。",
     "author": "yuzuki",
-    "version": "1.6.51",
+    "version": "1.6.52",
     "loading_order": 200,
     "requires": [],
     "optional": [],
