@@ -39,7 +39,7 @@ import {
 } from './apps/mofo/mofo-renderer.js';
 
 const ST_PHONE_BASE_URL = new URL('./', import.meta.url).href;
-const ST_PHONE_VERSION = '1.6.51';
+const ST_PHONE_VERSION = '1.6.52';
 const ST_PHONE_CSS_REVISION = '20261020-ios-complete-theme-v3';
 const ST_PHONE_APP_SWIPE_REVISION = '20261002-wechat-chat-return';
 const ST_PHONE_ALBUM_MODULE_REVISION = '20261006-story-image-outside-close';
@@ -148,11 +148,11 @@ const WECHAT_INITIAL_ENABLED_OFFLINE_KEYS = [
 const WECHAT_MESSAGE_SOUND_URL = new URL('./assets/sounds/iphone-message-notification.mp3', ST_PHONE_BASE_URL).href;
 const ST_PHONE_CURRENT_UPDATE = {
     version: ST_PHONE_VERSION,
-    date: '2026-10-28',
+    date: '2026-10-30',
     items: [
-        "【钱包同步】微信钱包读取当前聊天MVU的system.inventory.cny，与主角可支配人民币共用一笔余额；禁止AI资产评估覆盖MVU。",
-        "【收支结算】转账、红包、收款、退款与蜜语充值提现等待MVU写入成功后结算，金额不足或写入失败时不完成交易；加入并发串行与交易ID去重。",
-        "【防重复扣款】主聊天线上支付回执只同步账单，现金收支仍由角色卡简报结算；微信已结算记录传入聊天上下文避免重复登记。"
+        "【角色图鉴】先读取当前聊天最新MVU的roles作为角色名单，再按正式姓名匹配静态档案、动态档案与角色关系；不在MVU中的角色不再由世界书目录自动加入。",
+        "【资料读取】包含未激活世界书；MVU角色缺少世界书档案时继续显示，已有MVU字段优先，缺项再读取对应档案。保留已有头像与来源偏好。",
+        "【性能】初次来源扫描限制四路并发，后台刷新只重读相关世界书；手动刷新和世界书更新重新检索。"
 ]
 };
 
@@ -11274,7 +11274,7 @@ if (window.GGP_Loaded) {
 
                 // 打开对应的APP
                 if (appId === 'dossier') {
-                    import('./apps/dossier/dossier-app.js').then(async ({ DossierApp }) => {
+                    import('./apps/dossier/dossier-app.js?v=1.6.52&r=20261030-mvu-roster').then(async ({ DossierApp }) => {
                         if (currentApp !== 'dossier') return;
                         if (!window.VirtualPhone.dossierApp) window.VirtualPhone.dossierApp = new DossierApp(phoneShell, storage);
                         await window.VirtualPhone.dossierApp.render();
