@@ -10,7 +10,8 @@
  * Copyright (c) yuzuki. All rights reserved.
  * ======================================================== */
 // 微信APP主程序
-import { ChatView } from './chat-view.js?v=20261028-wallet-151';
+import { ChatView } from './chat-view.js?v=20261030-mvu-chat-153';
+import { readWechatRoleState, renderWechatAffectionBadge, escapeWechatContextText } from './wechat-generation-context.js?v=20261030-mvu-chat-153';
 import { ContactsView } from './contacts-view.js?v=20261025-contact-profile-dossier-139';
 import { MomentsView } from './moments-view.js?v=20261004-moments-image-cancel';
 import { WechatData } from './wechat-data.js?v=20261028-wallet-151';
@@ -90,11 +91,39 @@ export class WechatApp {
     }
 
     deactivate() {
+        clearInterval(this._affectionHeaderTimer);
+        this._affectionHeaderTimer = null;
         this.chatView?.releaseInactiveResources?.();
+    }
+
+    syncAffectionHeader(chatId = this.currentChat?.id) {
+        if (!this.currentChat || this.currentChat.type === 'group'
+            || String(chatId || '') !== String(this.currentChat.id || '')) return;
+        const badge = document.querySelector('.phone-view-current [data-wechat-affection]');
+        if (!badge) return;
+        const contact = this.currentChat.contactId ? this.wechatData.getContact(this.currentChat.contactId) : this.wechatData.getContactByName(this.currentChat.name);
+        const value = readWechatRoleState(contact || {name: this.currentChat.name}, window.SillyTavern?.getContext?.() || {}).affection;
+        const label = '好感度：' + (value === undefined ? '未记录' : String(value));
+        if (badge.textContent !== label) badge.textContent = label;
+        badge.setAttribute('aria-label', label);
+    }
+
+    _startAffectionHeaderRefresh() {
+        if (!this.currentChat || this.currentChat.type === 'group') {
+            clearInterval(this._affectionHeaderTimer);
+            this._affectionHeaderTimer = null;
+            return;
+        }
+        this.syncAffectionHeader();
+        if (this._affectionHeaderTimer) return;
+        this._affectionHeaderTimer = setInterval(() => {
+            if (!document.hidden && document.querySelector('.phone-view-current [data-wechat-affection]')) this.syncAffectionHeader();
+        }, 1500);
     }
 
     resumeAfterPanelOpen() {
         if (!this.currentChat) return false;
+        this._startAffectionHeaderRefresh();
         return this.chatView?.resumeAfterPanelOpen?.() === true;
     }
 
@@ -324,6 +353,7 @@ export class WechatApp {
 }
 
 .wechat-header-title {
+    min-width: 0;
     font-size: 14px;  /* 🔥 字号减小 */
     font-weight: 400;
     color: #000;
@@ -333,7 +363,12 @@ export class WechatApp {
     position: relative;
 }
 
+.wechat-app.wechat-has-affection>.wechat-header{height:auto;min-height:44px;padding-top:6px;padding-bottom:6px}
+.wechat-contact-heading{display:inline-flex;flex-direction:column;align-items:center;gap:3px;max-width:100%;vertical-align:middle}
+.wechat-contact-name{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wechat-affection-badge{display:block;color:#8a5c7a;font-size:10px;font-weight:500;line-height:1.2;white-space:nowrap}
 .wechat-header-title-text {
+    max-width: 100%;
     display: inline-block;
     position: relative;
     line-height: 1.1;
@@ -5597,18 +5632,15 @@ export class WechatApp {
                 const currentContact = this.currentChat.contactId
                     ? this.wechatData.getContact(this.currentChat.contactId)
                     : this.wechatData.getContactByName(this.currentChat.name);
-                const nickname = String(currentContact?.name || this.currentChat.name || '').trim();
+                const nickname = escapeWechatContextText(String(currentContact?.name || this.currentChat.name || '').trim());
+                const affection = renderWechatAffectionBadge(currentContact || {name: this.currentChat.name}, window.SillyTavern?.getContext?.() || {});
                 const isHoneyContact = currentContact?.sourceApp === 'honey' || currentContact?.sourceLabel === '蜜语' || currentContact?.sourceLabel === '主播';
-                if (!isHoneyContact) return nickname;
                 const honeyLabel = currentContact?.sourceLabel === '主播' || String(currentContact?.relation || '').includes('主播') ? '主播' : '蜜语';
-                return `
-                    <span style="position:relative; display:inline-flex; align-items:center; justify-content:center; line-height:1.1; overflow:visible;">
-                        <span style="position:absolute; left:50%; top:-11px; transform:translateX(-50%); display:inline-flex; align-items:center; gap:3px; padding:1px 5px; border-radius:999px; background:rgba(255,105,180,0.14); color:#ff5fa2; font-size:8px; line-height:1; border:1px solid rgba(255,105,180,0.24); white-space:nowrap;">
-                            <i class="fa-solid fa-heart" style="font-size:7px;"></i>${honeyLabel}
-                        </span>
-                        <span>${nickname}</span>
-                    </span>
-                `;
+                const nameHtml = isHoneyContact
+                    ? '<span style="display:inline-flex;align-items:center;gap:4px;"><span style="color:#ff5fa2;font-size:8px;white-space:nowrap;">'+honeyLabel+'</span>'+nickname+'</span>'
+                    : nickname;
+                return '<span class="wechat-contact-heading"><span class="wechat-contact-name">'+nameHtml+'</span>'+affection+'</span>';
+
             }
             if (this.currentView === 'discover') return '朋友圈';
             return '微信';
@@ -5678,6 +5710,7 @@ export class WechatApp {
         ].filter(Boolean).join(' ');
         const appClass = [
             'wechat-app',
+            this.currentChat && this.currentChat.type !== 'group' ? 'wechat-has-affection' : '',
             isMainRootView ? 'wechat-main-shell' : '',
             hasMainShellBackground ? 'wechat-chatlist-bg-enabled' : ''
         ].filter(Boolean).join(' ');
@@ -5750,6 +5783,7 @@ export class WechatApp {
         const viewId = this.currentChat ? `wechat-chat-${this.currentChat.id}` : `wechat-main`;
         this.phoneShell.setContent(html, viewId);
         this.bindEvents();
+        this._startAffectionHeaderRefresh();
 
         if (this.currentView === 'contacts' && !this.currentChat) {
             setTimeout(() => {
