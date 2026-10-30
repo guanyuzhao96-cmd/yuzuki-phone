@@ -1,6 +1,7 @@
 import { CALL_HANGUP_RULE, parseCallHangupReply } from '../../config/call-hangup.js';
 import { WorldbookManager } from '../../config/worldbook-manager.js';
-import { buildCharacters, findMvuRole, formatMvuValue, latestMvuSnapshot } from '../dossier/dossier-data.js';
+import { buildCharacters, buildMvuCharacters, listMvuCharacters, formatMvuValue } from '../dossier/dossier-data.js?v=20261030-mvu-roster-152';
+import { readWechatMvuSnapshot, readWechatRoleState, extractWechatBehaviorRules, buildWechatBehaviorPrompt, buildWechatReplyProtocol } from './wechat-generation-context.js?v=20261030-mvu-chat-153';
 import { getMvuWalletPrompt } from './mvu-wallet.js?v=20261028-wallet-151';
 /* ========================================================
  *  柚月小手机 (Yuzuki's Little Phone)
@@ -1022,34 +1023,47 @@ export class ChatView {
 
     async _getWechatRoleArchive(context = null) {
         const ctx = context || this._safeGetContext?.() || {};
+        const snapshot = readWechatMvuSnapshot(ctx);
         const scope = JSON.stringify([
-            ctx?.characterId ?? '',
-            ctx?.chatId ?? '',
-            ctx?.chatMetadata?.file_name ?? '',
-            ctx?.chatMetadata?.world_info ?? ''
+            ctx?.characterId ?? '', ctx?.chatId ?? '',
+            ctx?.chatMetadata?.file_name ?? '', ctx?.chatMetadata?.world_info ?? '',
+            listMvuCharacters(snapshot?.data)
         ]);
-        if (this._wechatRoleArchiveCache?.scope === scope
-            && Date.now() - this._wechatRoleArchiveCache.loadedAt < 60_000) {
+        if (this._wechatRoleArchiveCache?.scope === scope && Date.now() - this._wechatRoleArchiveCache.loadedAt < 60_000) {
             return this._wechatRoleArchiveCache.data;
         }
         if (this._wechatRoleArchiveLoad?.scope === scope) return this._wechatRoleArchiveLoad.promise;
-
         const promise = (async () => {
             try {
                 const manager = window.VirtualPhone?.dossierApp?.manager || new WorldbookManager(this.app?.storage);
-                const bookNames = await manager.getDossierDefaultBooks();
-                const results = await Promise.allSettled(bookNames.map(name => manager.readDossierWorldbook(name)));
-                const books = results.filter(result => result.status === 'fulfilled').map(result => result.value);
+                const [attached, available] = await Promise.allSettled([
+                    manager.getDossierDefaultBooks(),
+                    manager.fetchAllAvailableWorldBooks?.() || []
+                ]);
+                const bookNames = [...new Set([
+                    ...(attached.status === 'fulfilled' ? attached.value : []),
+                    ...(available.status === 'fulfilled' ? available.value.map(book => book.name) : [])
+                ].filter(Boolean))];
+                const books = [];
+                for (let offset = 0; offset < bookNames.length; offset += 4) {
+                    const results = await Promise.allSettled(bookNames.slice(offset, offset + 4).map(name => manager.readDossierWorldbook(name)));
+                    books.push(...results.filter(result => result.status === 'fulfilled').map(result => result.value));
+                }
+                const mvuCharacters = buildMvuCharacters(books, snapshot?.data);
+                const mvuNames = new Set(mvuCharacters.map(role => role.name));
                 const data = {
-                    characters: buildCharacters(books),
+                    characters: [...mvuCharacters, ...buildCharacters(books).filter(role => !mvuNames.has(role.name))],
+                    behaviorRules: (() => {
+                        const attachedNames = new Set(attached.status === 'fulfilled' ? attached.value : []);
+                        const currentRules = extractWechatBehaviorRules(books.filter(book => attachedNames.has(book.name)));
+                        return currentRules.length ? currentRules : extractWechatBehaviorRules(books);
+                    })()
                 };
                 this._wechatRoleArchiveCache = { scope, loadedAt: Date.now(), data };
                 return data;
             } catch (error) {
-                console.warn('[Wechat] 读取联系人角色档案失败，将使用联系人已有资料:', error);
-                const data = { characters: [] };
-                this._wechatRoleArchiveCache = { scope, loadedAt: Date.now(), data };
-                return data;
+                console.warn('[Wechat] 联系人档案读取失败，本轮继续读取MVU现值。');
+                return { characters: [], behaviorRules: [] };
             } finally {
                 if (this._wechatRoleArchiveLoad?.scope === scope) this._wechatRoleArchiveLoad = null;
             }
@@ -1058,10 +1072,37 @@ export class ChatView {
         return promise;
     }
 
+    async _buildWechatRuntimeStatePrompt(targetChat, context, {isProactive = false} = {}) {
+        if (!targetChat) return '';
+        const snapshot = readWechatMvuSnapshot(context);
+        const contacts = this.app.wechatData.getContacts?.() || [];
+        const findContact = name => this.app.wechatData.findContactByNameLoose?.(name, {includeChats: false})
+            || contacts.find(contact => [contact.name, contact.formalName, contact.characterName, contact.remark].includes(name))
+            || {name};
+        let targets;
+        if (isProactive) {
+            targets = contacts;
+        } else if (targetChat.type === 'group') {
+            const members = Array.isArray(targetChat.members) && targetChat.members.length
+                ? targetChat.members : this._getGroupChatParticipants(targetChat);
+            targets = members.map(member => findContact(String(member?.name || member || '').trim()));
+        } else {
+            targets = [targetChat.contactId ? this.app.wechatData.getContact(targetChat.contactId) || findContact(targetChat.name) : findContact(targetChat.name)];
+        }
+        const seen = new Set();
+        const states = targets.filter(Boolean).map(contact => readWechatRoleState(contact, context, snapshot))
+            .filter(state => state.status === 'matched' && !seen.has(state.id) && seen.add(state.id));
+        if (!states.length) return '';
+        const archive = await this._getWechatRoleArchive(context);
+        return buildWechatBehaviorPrompt(states, archive.behaviorRules || [], archive.characters || []);
+    }
+
     async _getWechatContactSyncProfile(contact = {}, context = null) {
         const ctx = context || this._safeGetContext?.() || {};
-        const contactNames = [contact.characterName, contact.formalName, contact.fullName, contact.name, contact.remark]
+        const contactNames = [contact.characterName, contact.formalName, contact.fullName, contact.realName, contact.name, contact.remark]
             .map(value => String(value || '').trim()).filter(Boolean);
+        const initialState = readWechatRoleState(contact, ctx);
+        if (initialState.status === 'matched') contactNames.unshift(initialState.name);
         const contactName = contactNames[0] || '';
         const roleData = contactNames.length > 0 ? await this._getWechatRoleArchive(ctx) : { characters: [] };
         const roleArchives = Array.isArray(roleData) ? roleData : roleData.characters || [];
@@ -1070,14 +1111,9 @@ export class ChatView {
         const matchingCharacter = characterList.find(character => contactNames.includes(
             String(character?.name || character?.data?.name || '').trim()
         )) || null;
-        const mvuApi = ctx.Mvu || window.Mvu || window.parent?.Mvu;
-        const mvuSnapshot = latestMvuSnapshot(
-            typeof mvuApi?.getMvuData === 'function' ? args => mvuApi.getMvuData(args) : null,
-            Array.isArray(ctx.chat) ? ctx.chat : []
-        );
         const formalName = roleArchive?.name || matchingCharacter?.name || matchingCharacter?.data?.name || contactName;
-        const mvuMatch = formalName ? findMvuRole(mvuSnapshot?.data, formalName) : { status: 'missing', role: null };
-        const mvuRole = mvuMatch.status === 'matched' ? mvuMatch.role : null;
+        const currentState = readWechatRoleState({...contact, formalName}, ctx);
+        const mvuRole = currentState.status === 'matched' ? currentState.role : null;
         const normalizeFieldKey = value => String(value || '').toLowerCase().replace(/[\s_\-\/／·：:（）()【】\[\]]/g, '');
         const roleSources = Array.isArray(roleArchive?.sources) ? roleArchive.sources : [];
         const archiveFields = roleSources.flatMap(source => (Array.isArray(source.fields) ? source.fields : [])
@@ -1093,20 +1129,10 @@ export class ChatView {
         const getMvuField = (aliases = []) => {
             if (!mvuRole) return undefined;
             const expected = new Set(aliases.map(normalizeFieldKey));
-            const seen = new WeakSet();
-            const visit = (value, depth = 0) => {
-                if (!value || typeof value !== 'object' || depth > 5 || seen.has(value)) return undefined;
-                seen.add(value);
-                for (const [key, item] of Object.entries(value)) {
-                    if (expected.has(normalizeFieldKey(key)) && item !== undefined && item !== null && item !== '') return item;
-                }
-                for (const item of Object.values(value)) {
-                    const found = visit(item, depth + 1);
-                    if (found !== undefined) return found;
-                }
-                return undefined;
-            };
-            return visit(mvuRole);
+            for (const [key, value] of Object.entries(mvuRole)) {
+                if (expected.has(normalizeFieldKey(key)) && value !== undefined && value !== null && value !== '') return value;
+            }
+            return undefined;
         };
         const formatProfileValue = value => {
             if (value === undefined || value === null || value === '') return '未记录';
@@ -12578,6 +12604,9 @@ renderChatRoom(chat) {
             }
         }
 
+        systemPrompt = systemPrompt.replace(/\{\{user\}\}/g, () => userName)
+            .replace(/\{\{char\}\}/g, () => targetChat?.name || charName);
+
         // ========================================
         // 6️⃣ 当前微信聊天记录 / 通话记录
         // ========================================
@@ -12812,6 +12841,19 @@ renderChatRoom(chat) {
             });
         }
 
+        if (!callMode) {
+            const statePrompt = await this._buildWechatRuntimeStatePrompt(targetChat, context, {isProactive});
+            if (statePrompt) messages.push({
+                role: 'system', content: statePrompt,
+                name: 'SYSTEM (最新MVU与世界书行为规则)', isPhoneMessage: true
+            });
+            messages.push({
+                role: 'system',
+                content: buildWechatReplyProtocol({windowName: targetChat?.name || charName, userName, isGroup: isGroupChat, customEmojiList}),
+                name: 'SYSTEM (微信特殊消息协议)', isPhoneMessage: true
+            });
+        }
+
         if (isGroupChat && !callMode) {
             messages.push({
                 role: 'system',
@@ -13032,13 +13074,17 @@ renderChatRoom(chat) {
                 finalUserContent += `\n- 【方向锁定】当前微信单聊窗口是“${targetChat?.name || charName}”；手机主人/用户本人是“${userName}”。你只能扮演“${targetChat?.name || charName}”给“${userName}”发新增微信消息。`;
                 finalUserContent += `\n- 即使角色卡主角、酒馆 assistant 或正文叙事视角不是“${targetChat?.name || charName}”，当前微信单聊也必须以“${targetChat?.name || charName}”的身份和口吻回复；角色卡和正文只作为背景参考。`;
                 finalUserContent += `\n- 【用户最新输入】是“${userName}”刚刚发出的消息，只能作为被回复的内容；禁止把“${userName}”当成聊天对象、联系人、窗口名或回复发送者，禁止输出“${userName}:”、用户:、玩家:。`;
-                finalUserContent += '\n- 微信消息内容必须是角色真实打进聊天框里的文字；禁止写动作、环境、神态、写字过程、语气说明，禁止出现“顿了顿/指尖悬停/又补了一条/语气里”等叙事句。';
+                finalUserContent += '\n- 普通文字消息必须是角色实际发出的聊天文字，禁止写动作、环境、神态和语气旁白。图片、表情包、转账、红包、语音等特殊消息仍允许按【微信消息协议】单独成行；其中文描述、英文tags和金额括号必须保留。';
             }
             finalUserContent += isProactive
                 ? '\n- 只输出新的主动微信消息；不得重复任何已有微信消息，也不得把正文里刚发生的对白原样复读成微信消息。'
                 : '\n- 只输出当前微信窗口的新增回复；严禁重复“手机微信已有消息”中已经存在的微信消息，严禁将正文里刚发生的对白重复成微信消息。';
             finalUserContent += '\n- 可以基于正文最新事件、情绪、地点变化作出自然回应，但回复必须是新的微信内容。';
             finalUserContent += '\n- 消息时间必须承接当前窗口最后一条已存在消息的时间并向后推进。';
+        }
+
+        if (!callMode) {
+            finalUserContent += '\n- 同时遵守【微信消息协议】及【微信角色当前状态与表达约束】：普通文字的禁旁白要求不禁止图片、表情包、转账和红包卡片。每位发送者按自己最新MVU的好感度、欲望值、堕落值及世界书关系阶段作答，不报数、不自动改值。';
         }
 
         // 只把本轮最新用户输入中的图片附加到 user 消息末尾；历史图片仅保留文字说明。
@@ -13508,6 +13554,7 @@ renderChatRoom(chat) {
     }
 
     syncHeaderStatusDot(targetChatId = null) {
+        this.app.syncAffectionHeader?.(targetChatId);
         this._setHeaderStatusDot(this.getHeaderStatusDotColor(targetChatId), targetChatId);
     }
 
