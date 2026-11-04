@@ -9,7 +9,7 @@
  * 
  * Copyright (c) yuzuki. All rights reserved.
  * ======================================================== */
-import { WechatData } from '../wechat/wechat-data.js?v=20261028-wallet-151';
+import { WechatData } from '../wechat/wechat-data.js?v=20261104-mvu-contacts-154';
 import { GlobalSocialStore } from '../../config/global-social-store.js';
 import { applyPhoneTagFilter } from '../../config/tag-filter.js';
 
