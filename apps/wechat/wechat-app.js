@@ -14,7 +14,7 @@ import { ChatView } from './chat-view.js?v=20261030-mvu-chat-153';
 import { readWechatRoleState, renderWechatAffectionBadge, escapeWechatContextText } from './wechat-generation-context.js?v=20261030-mvu-chat-153';
 import { ContactsView } from './contacts-view.js?v=20261025-contact-profile-dossier-139';
 import { MomentsView } from './moments-view.js?v=20261004-moments-image-cancel';
-import { WechatData } from './wechat-data.js?v=20261028-wallet-151';
+import { WechatData } from './wechat-data.js?v=20261104-mvu-contacts-154';
 import { getWalletAssetTotals, parseWalletAssetEvaluation } from './wallet-assets.js?v=20261011-wallet-credit-repayment';
 import { ImageCropper } from '../settings/image-cropper.js';
 import { formatWechatChatListTime } from './chat-list-time.js?v=20260717-wechat-list-time';
