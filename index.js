@@ -39,11 +39,11 @@ import {
 } from './apps/mofo/mofo-renderer.js';
 
 const ST_PHONE_BASE_URL = new URL('./', import.meta.url).href;
-const ST_PHONE_VERSION = '1.6.53';
+const ST_PHONE_VERSION = '1.6.54';
 const ST_PHONE_CSS_REVISION = '20261020-ios-complete-theme-v3';
 const ST_PHONE_APP_SWIPE_REVISION = '20261002-wechat-chat-return';
 const ST_PHONE_ALBUM_MODULE_REVISION = '20261006-story-image-outside-close';
-const ST_PHONE_WECHAT_MODULE_REVISION = '20261030-mvu-chat-media';
+const ST_PHONE_WECHAT_MODULE_REVISION = '20261104-mvu-contacts';
 const ST_PHONE_WEIBO_MODULE_REVISION = '20261002-first-return-guard';
 const ST_PHONE_X_MODULE_REVISION = '20261010-publish-guard';
 const ST_PHONE_HONEY_ASSET_REVISION = '20261028-mvu-wallet';
@@ -148,13 +148,8 @@ const WECHAT_INITIAL_ENABLED_OFFLINE_KEYS = [
 const WECHAT_MESSAGE_SOUND_URL = new URL('./assets/sounds/iphone-message-notification.mp3', ST_PHONE_BASE_URL).href;
 const ST_PHONE_CURRENT_UPDATE = {
     version: ST_PHONE_VERSION,
-    date: '2026-10-30',
-    items: [
-        "【微信特殊消息】普通文字的禁旁白规则不再压制图片、表情包、红包与转账；每次线上请求独立补齐原版特殊消息协议，兼容精简自定义预设。",
-        "【角色行为】每次请求单独读取最新MVU好感度、欲望值、堕落值及关系目标，参考当前角色卡的世界书规则和角色专属阶段条件；完整档案关闭时仍注入当前状态。",
-        "【顶部好感度】单聊标题下显示当前角色MVU好感度，支持0、负值与缺失提示；轻量更新读数，不重建聊天消息区。",
-        "【资料读取】已登记MVU角色允许匹配静态档案与未激活世界书，当前角色卡绑定的三值规则优先；修复默认微信提示词用户名占位符。"
-]
+    date: "2026-11-04",
+    items: ["【微信联系人】以当前 MVU 角色名单为准增量添加联系人，未匹配世界书档案或 AI 补充失败时仍可导入。"]
 };
 
 // 🔥 防重复加载检查（放在最前面，避免任何代码执行）
@@ -2880,7 +2875,7 @@ if (window.GGP_Loaded) {
             const latestTime = currentTime || tm?.getCurrentStoryTime?.();
             if (!latestTime?.date) return [];
 
-            const module = await import('./apps/wechat/wechat-data.js?v=20261028-wallet-151');
+            const module = await import('./apps/wechat/wechat-data.js?v=20261104-mvu-contacts-154');
             if (!window.VirtualPhone) window.VirtualPhone = {};
             const existingWechatData = window.VirtualPhone.wechatApp?.wechatData
                 || window.VirtualPhone.cachedWechatData
@@ -8307,7 +8302,7 @@ if (window.GGP_Loaded) {
         const conversationId = getCurrentTavernConversationIdentity(context);
 
         // 导入 WechatData（使用单例模式，确保消息被存储）
-        import('./apps/wechat/wechat-data.js?v=20261028-wallet-151').then(module => {
+        import('./apps/wechat/wechat-data.js?v=20261104-mvu-contacts-154').then(module => {
             let wechatData;
 
             if (getCurrentTavernConversationIdentity() !== conversationId) {
@@ -9352,7 +9347,7 @@ if (window.GGP_Loaded) {
             const sourceConversationId = getCurrentTavernConversationIdentity();
 
             // 导入 WeChat 数据模块处理
-            import('./apps/wechat/wechat-data.js?v=20261028-wallet-151').then(async module => {
+            import('./apps/wechat/wechat-data.js?v=20261104-mvu-contacts-154').then(async module => {
                 let wechatData;
                 if (getCurrentTavernConversationIdentity() !== sourceConversationId) {
                     console.warn('⚠️ 微信回复写入前会话已切换，丢弃旧会话回调');
@@ -9629,7 +9624,7 @@ if (window.GGP_Loaded) {
         if (!/"moments"\s*:/.test(sourceText)) return null;
 
         try {
-            const module = await import('./apps/wechat/wechat-data.js?v=20261028-wallet-151');
+            const module = await import('./apps/wechat/wechat-data.js?v=20261104-mvu-contacts-154');
             if (!window.VirtualPhone) window.VirtualPhone = {};
 
             const context = getContext();
@@ -9676,7 +9671,7 @@ if (window.GGP_Loaded) {
         if (payments.length === 0) return [];
 
         const sourceConversationId = getCurrentTavernConversationIdentity();
-        const module = await import('./apps/wechat/wechat-data.js?v=20261028-wallet-151');
+        const module = await import('./apps/wechat/wechat-data.js?v=20261104-mvu-contacts-154');
         if (getCurrentTavernConversationIdentity() !== sourceConversationId) {
             console.warn('⚠️ [线上支付] 扣款前会话已切换，丢弃旧会话回调');
             return [];
@@ -11700,7 +11695,7 @@ if (window.GGP_Loaded) {
 
                     let wechatData = window.VirtualPhone?.wechatApp?.wechatData || window.VirtualPhone?.cachedWechatData;
                     if (!wechatData) {
-                        const module = await import('./apps/wechat/wechat-data.js?v=20261028-wallet-151');
+                        const module = await import('./apps/wechat/wechat-data.js?v=20261104-mvu-contacts-154');
                         wechatData = new module.WechatData(storage);
                     }
 
@@ -11936,7 +11931,7 @@ if (window.GGP_Loaded) {
                                     || window.VirtualPhone.cachedWechatData
                                     || null;
                                 if (!wechatDataInstance && storage) {
-                                    const module = await import('./apps/wechat/wechat-data.js?v=20261028-wallet-151');
+                                    const module = await import('./apps/wechat/wechat-data.js?v=20261104-mvu-contacts-154');
                                     if (getCurrentTavernConversationIdentity() !== sourceConversationId) {
                                         console.warn('⚠️ 微信删楼回滚期间会话已切换，丢弃旧会话回调');
                                         return;
@@ -12242,7 +12237,7 @@ if (window.GGP_Loaded) {
                                     let wechatDataInstance = window.VirtualPhone?.wechatApp?.wechatData || window.VirtualPhone?.cachedWechatData;
                                     if (!wechatDataInstance && storage) {
                                         try {
-                                            const module = await import('./apps/wechat/wechat-data.js?v=20261028-wallet-151');
+                                            const module = await import('./apps/wechat/wechat-data.js?v=20261104-mvu-contacts-154');
                                             if (!window.VirtualPhone) window.VirtualPhone = {};
                                             window.VirtualPhone.cachedWechatData = new module.WechatData(storage);
                                             wechatDataInstance = window.VirtualPhone.cachedWechatData;
