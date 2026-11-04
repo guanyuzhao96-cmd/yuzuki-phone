@@ -12,7 +12,7 @@
 // 微信数据管理
 import { GlobalSocialStore } from '../../config/global-social-store.js';
 import { WorldbookManager } from '../../config/worldbook-manager.js';
-import { buildCharacters } from '../dossier/dossier-data.js';
+import { buildMvuCharacters, latestMvuSnapshot, listMvuCharacters } from '../dossier/dossier-data.js?v=20261030-mvu-roster-152';
 import { readMvuWallet, changeMvuWallet } from './mvu-wallet.js?v=20261028-wallet-151';
 import { parseImagePromptDescriptionPair, readBalancedImagePromptGroup } from '../../config/image-prompt-format.js';
 import { parseWechatVoiceContent } from './voice-text.js';
@@ -4211,86 +4211,74 @@ async loadContactsFromCharacter() {
         }
         
         
-        // 与角色档案使用相同的来源发现和 CWB 目录索引，仅候选目录内存在静态/动态资料的角色。
-        const directoryCharacters = await this.getDossierContactCharacters();
-        const normalizeName = (raw) => String(raw || '')
-            .trim()
-            .replace(/\s+/g, '')
-            .replace(/[（(][^（）()]*[）)]/g, '')
-            .toLowerCase();
-        const existingContactKeys = new Set(this.getContacts().flatMap(contact => [
-            contact?.name,
-            contact?.nickname,
-            contact?.remark
-        ]).map(normalizeName).filter(Boolean));
-        const candidates = directoryCharacters.filter(character => character?.name
-            && !existingContactKeys.has(normalizeName(character.name))
-            && !this.findContactAliasConflict([character.name]));
-        if (candidates.length === 0) {
+        const storageKey = this.getStorageKey();
+        const dataOwner = this.data;
+        let api = context.Mvu || window.Mvu;
+        try { api ||= window.parent?.Mvu; } catch (_) {}
+        const snapshot = latestMvuSnapshot(
+            typeof api?.getMvuData === 'function' ? args => api.getMvuData(args) : null,
+            context.chat
+        );
+        const roster = listMvuCharacters(snapshot?.data);
+        const normalizeName = raw => this._normalizeExactContactName(raw);
+        const selfNameKey = normalizeName(context.name1 || '用户');
+        const hasContact = name => this.getContacts().some(contact =>
+            this._getContactAliasValues(contact).some(alias => normalizeName(alias) === normalizeName(name)));
+        const missing = name => normalizeName(name) !== selfNameKey && !hasContact(name);
+        if (!roster.some(role => missing(role.name))) {
             return {
                 success: true,
                 count: 0,
-                message: directoryCharacters.length
-                    ? '目录中的角色都已在微信通讯录中，无需新增。'
-                    : '当前可读取的世界书目录中没有找到带静态或动态资料的角色，未生成联系人。'
+                message: roster.length
+                    ? 'MVU 中的角色已在微信通讯录中，无需新增。'
+                    : '当前聊天的 MVU 中没有可读取的角色。'
             };
         }
 
-        // ✅ 构建仅含本次缺失角色及其档案内容的AI消息
-        const messages = await this.buildContactPrompt(context, { contactCandidates: candidates });
-        
-        
-        // ✅ 调用AI
-        aiResponse = await this.sendToAI(messages);
-        
-        if (!aiResponse) {
-            throw new Error('AI未返回数据');
+        const characters = await this.getDossierContactCharacters(snapshot.data);
+        const candidates = characters.filter(character => missing(character.name));
+        let generatedData = {};
+        let enrichmentFailed = false;
+        if (candidates.length) {
+            try {
+                const messages = await this.buildContactPrompt(context, { contactCandidates: candidates });
+                aiResponse = await this.sendToAI(messages);
+                generatedData = (aiResponse && this.parseAIResponse(aiResponse)) || {};
+                enrichmentFailed = !Array.isArray(generatedData.contacts);
+            } catch (error) {
+                enrichmentFailed = true;
+                console.warn('[微信联系人] AI 补充资料失败，继续导入 MVU 角色:', error);
+            }
         }
-        
-        
-        // ✅ 解析AI返回
-        let generatedData = { contacts: [], groups: [], initialTime: null };
-        try {
-            generatedData = this.parseAIResponse(aiResponse) || generatedData;
-        } catch (parseError) {
-            // 联系人名单以 CWB 目录为准；AI 的时间或格式不完整时，不应阻断目录联系人导入。
-            console.warn('⚠️ [微信联系人] AI响应解析失败，将直接使用目录候选名单:', parseError);
-        }
-        
-        if (!generatedData || !generatedData.contacts) {
-            throw new Error('AI返回的数据格式错误');
+        if (this.getStorageKey() !== storageKey || this.data !== dataOwner) {
+            return { success: false, message: '聊天已切换，请在当前聊天重新生成联系人。' };
         }
 
-        // 目录白名单保护：不接纳 AI 自行补造或目录中没有的联系人。
-        const candidateKeys = new Set(candidates.map(character => normalizeName(character.name)));
-        const parsedContacts = (Array.isArray(generatedData.contacts) ? generatedData.contacts : [])
-            .filter(contact => candidateKeys.has(normalizeName(contact?.name)));
+        const parsedContacts = new Map((Array.isArray(generatedData.contacts) ? generatedData.contacts : [])
+            .map(contact => [normalizeName(contact?.name), contact]));
+        const rosterKeys = new Set(roster.map(role => normalizeName(role.name)));
         generatedData.contacts = candidates.map(character => {
-            const key = normalizeName(character.name);
-            const parsed = parsedContacts.find(contact => normalizeName(contact?.name) === key) || {};
-            const fields = character.sources.flatMap(source => Array.isArray(source.fields) ? source.fields : []);
+            const parsed = parsedContacts.get(normalizeName(character.name)) || {};
+            const fields = character.sources.flatMap(source => source.fields || []);
             const fieldValue = pattern => fields.find(field => pattern.test(String(field.label || '')))?.value || '';
-            const gender = parsed.gender || fieldValue(/^(性别|生理性别)$/);
-            const relation = parsed.relation || fieldValue(/^(与主角关系|和主角关系|当前关系|关系)$/);
-            return { ...parsed, name: character.name, gender, relation };
+            const role = snapshot.data.roles[character.mvuId];
+            const relation = role['与主角的关系'] || role['与主角关系'] || role.relationship
+                || fieldValue(/^(与主角关系|和主角关系|当前关系|关系)$/) || parsed.relation;
+            const gender = role.gender || role['性别'] || fieldValue(/^(性别|生理性别)$/) || parsed.gender;
+            const remark = rosterKeys.has(normalizeName(parsed.remark)) || hasContact(parsed.remark) ? '' : parsed.remark;
+            return { ...parsed, name: character.name, gender, relation, remark };
         });
-
 
         // ✅ 添加联系人（仅补全缺失，不覆盖已有）
         let addedCount = 0;
         let addedGroupCount = 0;
-        const selfNameKey = normalizeName(context?.name1 || '用户');
 
         const ensureContact = (rawName, options = {}) => {
             const displayName = String(rawName || '').trim();
             const key = normalizeName(displayName);
             if (!displayName || !key || key === selfNameKey) return null;
 
-            const existed = this.findContactAliasConflict([
-                displayName,
-                String(options.remark || '').trim()
-            ].filter(Boolean));
-            if (existed) return { contact: existed, created: false };
+            if (hasContact(displayName)) return null;
 
             const relation = options.relation || '';
             const avatar = options.avatar || '';
@@ -4298,7 +4286,7 @@ async loadContactsFromCharacter() {
                 id: `contact_${Date.now()}_${Math.random()}`,
                 name: displayName,
                 avatar,
-                remark: options.remark || '',
+                remark: hasContact(options.remark) ? '' : options.remark || '',
                 letter: this.getFirstLetter(displayName),
                 relation,
                 gender: this._normalizeGenderValue(options.gender)
@@ -4417,7 +4405,7 @@ async loadContactsFromCharacter() {
             success: true,
             count: addedCount,
             time: generatedData.initialTime || null,
-            message: `✅ 新增${addedCount}个联系人，新增${addedGroupCount}个群聊（已有项已跳过）`
+            message: `✅ 新增${addedCount}个联系人，新增${addedGroupCount}个群聊（已有项已跳过）${enrichmentFailed ? "。AI 补充资料未完成，已按 MVU 名单导入。" : ""}`
         };
         
     } catch (error) {
@@ -4435,39 +4423,26 @@ async loadContactsFromCharacter() {
     }
 }
     
-// 复用角色档案的世界书范围、目录检索和静态/动态条目关联。
-async getDossierContactCharacters() {
+// MVU 决定成员名单，世界书只补充角色资料。
+async getDossierContactCharacters(mvuData) {
     const manager = window.VirtualPhone?.worldbookManager || new WorldbookManager(this.storage);
-    if (typeof manager.getDossierDefaultBooks !== 'function' || typeof manager.readDossierWorldbook !== 'function') {
-        throw new Error('角色档案目录检索器未就绪，无法安全生成联系人');
-    }
-    const names = await manager.getDossierDefaultBooks();
-    if (!Array.isArray(names) || names.length === 0) return [];
-    const results = await Promise.allSettled(names.map(name => manager.readDossierWorldbook(name)));
-    const loaded = results.filter(result => result.status === 'fulfilled').map(result => result.value);
-    if (loaded.length === 0) {
-        const reason = results.find(result => result.status === 'rejected')?.reason;
-        throw new Error(reason?.message || '未能读取角色档案使用的世界书');
-    }
-
-    const byName = new Map();
-    buildCharacters(loaded).forEach(character => {
-        if (!character?.name || !Array.isArray(character.sources) || character.sources.length === 0) return;
-        const key = String(character.name).trim().replace(/\s+/g, '').toLowerCase();
-        const previous = byName.get(key);
-        if (previous) {
-            const sourceKeys = new Set(previous.sources.map(source => `${source.book}\u0000${source.comment}\u0000${source.content}`));
-            previous.sources.push(...character.sources.filter(source => {
-                const sourceKey = `${source.book}\u0000${source.comment}\u0000${source.content}`;
-                if (sourceKeys.has(sourceKey)) return false;
-                sourceKeys.add(sourceKey);
-                return true;
-            }));
-        } else {
-            byName.set(key, { ...character, sources: [...character.sources] });
+    const [attached, available] = await Promise.allSettled([
+        Promise.resolve().then(() => manager.getDossierDefaultBooks()),
+        Promise.resolve().then(() => manager.fetchAllAvailableWorldBooks?.() || [])
+    ]);
+    const names = [...new Set([
+        ...(attached.status === 'fulfilled' ? attached.value || [] : []),
+        ...(available.status === 'fulfilled' ? (available.value || []).map(book => book.name) : [])
+    ].filter(Boolean))];
+    const books = [];
+    for (let offset = 0; offset < names.length; offset += 4) {
+        const results = await Promise.allSettled(names.slice(offset, offset + 4)
+            .map(async name => manager.readDossierWorldbook(name)));
+        for (const result of results) {
+            if (result.status === 'fulfilled' && result.value) books.push(result.value);
         }
-    });
-    return Array.from(byName.values());
+    }
+    return buildMvuCharacters(books, mvuData);
 }
 
 // 🔧 构建联系人生成提示词（重构版）
@@ -4559,7 +4534,7 @@ async buildContactPrompt(context, options = {}) {
     }).join('\n\n').slice(0, 24000);
     messages.push({
         role: 'system',
-        content: `【角色档案目录检索结果】\n本次只允许为以下目录角色生成微信联系人。候选名单来自角色档案使用的 CWB 目录，已读取匹配到的静态/动态档案。\n候选角色全名：${candidateNames.join('、')}\n对应档案摘录：\n${directoryRoleDetails}\n\n当前微信联系人（不得重复添加）：${existingContacts.join('、') || '暂无'}\n硬性规则：姓名必须与候选角色全名一致；不得新增名单外人物、不得把群成员扩展成联系人、不得改写已有联系人。`
+        content: `【MVU 角色名单与档案检索结果】\n候选名单来自当前聊天的 MVU。请为所有候选角色补充联系人资料，部分角色可能没有世界书档案。\n候选角色全名：${candidateNames.join('、')}\n对应档案摘录：\n${directoryRoleDetails}\n\n当前微信联系人（不得重复添加）：${existingContacts.join('、') || '暂无'}\n硬性规则：姓名必须与候选角色全名一致；不得新增名单外人物、不得把群成员扩展成联系人、不得改写已有联系人。`
     });
 
     const charCardParts = [
@@ -4624,7 +4599,7 @@ async buildContactPrompt(context, options = {}) {
         : '';
     messages.push({
         role: 'user',
-        content: `${loadContactsPrompt}${lobbyHardRule}\n\n【本次增量规则】仅从上方角色档案目录候选名单中，为当前微信通讯录尚未收录的角色生成联系人；名单外角色必须省略。候选角色少于提示词要求数量时按实际数量生成，不得补造角色。只新增，不清空或覆盖已有联系人、聊天记录和群聊。`
+        content: `${loadContactsPrompt}${lobbyHardRule}\n\n【本次增量规则】仅从上方 MVU 候选名单中，为当前微信通讯录尚未收录的角色生成联系人；名单外角色必须省略。候选角色少于提示词要求数量时按实际数量生成，不得补造角色。只新增，不清空或覆盖已有联系人、聊天记录和群聊。`
     });
     return messages;
 }
